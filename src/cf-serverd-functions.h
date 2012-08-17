@@ -41,8 +41,32 @@
 #include "conversion.h"
 #include "reporting.h"
 
+// To get access to utility functions
+#include "libutils/utils.h"
+
 void ThisAgentInit(void);
-GenericAgentConfig CheckOpts(int argc, char **argv);
+/*
+ * CheckOpts returns one of this values or -1
+ */
+enum CommandLineArguments {
+    CommandLineArgumentsNoArguments = 0
+    , CommandLineArgumentsd
+    , CommandLineArgumentsv
+    , CommandLineArgumentsI
+    , CommandLineArgumentsK
+    , CommandLineArgumentsf
+    , CommandLineArgumentsD
+    , CommandLineArgumentsN
+    , CommandLineArgumentsV
+    , CommandLineArgumentsS
+    , CommandLineArgumentsx
+    , CommandLineArgumentsL
+    , CommandLineArgumentsF
+    , CommandLineArgumentsM
+    , CommandLineArgumentsh
+};
+
+int CheckOpts(int argc, char **argv);
 int OpenReceiverChannel(void);
 void CheckFileChanges(Policy **policy, GenericAgentConfig config, const ReportContext *report_context);
 

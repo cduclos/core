@@ -9,9 +9,22 @@ LDADD = libpromises.la
 ../pub/libcfpub.la:
 	$(MAKE) -C ../pub $(AM_MAKEFLAGS) libcfpub.la
 
+# libutils
+
+projlib_LTLIBRARIES = libutils.la
+libutils_la_LDFLAGs = -version-info 1:0:0 -no-undefined
+libutils_la_CFLAGS = $(AM_CFLAGS) -DLIBUTILS_INTERNALS
+libutils_la_SOURCES = \
+    libutils/util.h \
+    libutils/bit-operations.h \
+    libutils/compiler.h \
+    libutils/linkedlist.c \
+    libutils/linkedlist.h \
+    libutils/linkedlist_p.h
+
 # libpromises
 
-projlib_LTLIBRARIES = libpromises.la
+projlib_LTLIBRARIES += libpromises.la
 
 libpromises_la_LDFLAGS = -version-info 1:0:0 -no-undefined
 libpromises_la_LIBADD = ../pub/libcfpub.la $(NOVA_LDADD)

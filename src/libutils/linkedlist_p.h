@@ -22,21 +22,24 @@
   included file COSL.txt.
 */
 
-#include "cf-serverd-functions.h"
+/*
+ * This file exists as an implementation detail, none of the structs or
+ * methods defined here represent any kind of stable API and can be changed
+ * at any moment, without warning. Do not include this file in your projects.
+ *
+ * I mean it, if you include this file your code will break. That is not a
+ * threat, just a statement of facts.
+ */
 
-int main(int argc, char *argv[])
-{
-    GenericAgentConfig config = GenericAgentDefaultConfig(cf_server);
-    CheckOpts(argc, argv);
+#ifndef LINKEDLIST_P_H
+#define LINKEDLIST_P_H
 
-    ReportContext *report_context = OpenReports("server");
-    Policy *policy = GenericInitialize("server", config, report_context);
-    ThisAgentInit();
-    KeepPromises(policy, report_context);
-    Summarize();
+struct LinkedListNode {
+    void *mPayload;
+    struct LinkedListNode *mNext;
+    struct LinkedListNode *mPrevious;
+};
 
-    StartServer(policy, config, report_context);
+typedef struct LinkedListNode LinkedListNode;
 
-    ReportContextDestroy(report_context);
-    return 0;
-}
+#endif // LINKEDLIST_P_H

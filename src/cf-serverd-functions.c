@@ -72,13 +72,18 @@ static const char *HINTS[15] =
 
 /*******************************************************************/
 
-GenericAgentConfig CheckOpts(int argc, char **argv)
+/*
+ * The point of this function is to parse the arguments and tell us if there
+ * was a problem with them. So we will do that and return an integer with
+ * the result.
+ */
+int CheckOpts(int argc, char **argv)
 {
+    int arguments = CommandLineArgumentsNoArguments;
     extern char *optarg;
     char ld_library_path[CF_BUFSIZE];
     int optindex = 0;
     int c;
-    GenericAgentConfig config = GenericAgentDefaultConfig(cf_server);
 
     while ((c = getopt_long(argc, argv, "dvIKf:D:N:VSxLFMh", OPTIONS, &optindex)) != EOF)
     {
@@ -161,7 +166,7 @@ GenericAgentConfig CheckOpts(int argc, char **argv)
 
     CfDebug("Set debugging\n");
 
-    return config;
+    return 0;
 }
 
 /*******************************************************************/

@@ -48,7 +48,8 @@ check_PROGRAMS = \
 	map_test \
 	policy_test \
 	sort_test \
-	file_name_test
+        file_name_test \
+        libutils_linkedlist
 
 TESTS = $(check_PROGRAMS)
 
@@ -97,3 +98,6 @@ package_versions_compare_test_SOURCES = package_versions_compare_test.c ../../sr
 
 sort_test_SOURCES = sort_test.c ../../src/sort.c
 sort_test_LDADD = libtest.la
+
+libutils_linkedlist_SOURCES = libutils_linkedlist.c ../../src/libutils/linkedlist.c
+libutils_linkedlist_LDADD = libtest.la

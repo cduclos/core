@@ -22,21 +22,27 @@
   included file COSL.txt.
 */
 
-#include "cf-serverd-functions.h"
+#ifndef COMPILER_H
+#define COMPILER_H
 
-int main(int argc, char *argv[])
-{
-    GenericAgentConfig config = GenericAgentDefaultConfig(cf_server);
-    CheckOpts(argc, argv);
+/* Compiler-specific options/defines */
 
-    ReportContext *report_context = OpenReports("server");
-    Policy *policy = GenericInitialize("server", config, report_context);
-    ThisAgentInit();
-    KeepPromises(policy, report_context);
-    Summarize();
+#if defined(__GNUC__) && (__GNUC__ * 100 >= 3)
+# define FUNC_ATTR_NORETURN  __attribute__((noreturn))
+#else /* not gcc >= 3.0 */
+# define FUNC_ATTR_NORETURN
+#endif
 
-    StartServer(policy, config, report_context);
+#if defined(__GNUC__)
+# if defined (__MINGW32__)
+#  define FUNC_ATTR_PRINTF(string_index, first_to_check) \
+    __attribute__((format(gnu_printf, string_index, first_to_check)))
+# else
+#  define FUNC_ATTR_PRINTF(string_index, first_to_check) \
+    __attribute__((format(printf, string_index, first_to_check)))
+# endif
+#else
+# define FUNC_ATTR_PRINTF(string_index, first_to_check)
+#endif
 
-    ReportContextDestroy(report_context);
-    return 0;
-}
+#endif // COMPILER_H

@@ -22,21 +22,13 @@
   included file COSL.txt.
 */
 
-#include "cf-serverd-functions.h"
+#ifndef ERRORS_H
+#define ERRORS_H
 
-int main(int argc, char *argv[])
-{
-    GenericAgentConfig config = GenericAgentDefaultConfig(cf_server);
-    CheckOpts(argc, argv);
+/*
+ * Diverse functions used for error reporting
+ */
 
-    ReportContext *report_context = OpenReports("server");
-    Policy *policy = GenericInitialize("server", config, report_context);
-    ThisAgentInit();
-    KeepPromises(policy, report_context);
-    Summarize();
+void fatalError(char *s, ...);
 
-    StartServer(policy, config, report_context);
-
-    ReportContextDestroy(report_context);
-    return 0;
-}
+#endif // ERRORS_H

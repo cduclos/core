@@ -22,21 +22,14 @@
   included file COSL.txt.
 */
 
-#include "cf-serverd-functions.h"
+#ifndef BITOPERATIONS_H
+#define BITOPERATIONS_H
 
-int main(int argc, char *argv[])
-{
-    GenericAgentConfig config = GenericAgentDefaultConfig(cf_server);
-    CheckOpts(argc, argv);
+#define setBit(flags, bit) \
+    flags = flags | (1 << bit)
+#define unsetBit(flags, bit) \
+    flags = flags ^ (1 << bit)
+#define testBit(flags, bit) \
+    (flags & (1 << bit)) ? 1 : 0
 
-    ReportContext *report_context = OpenReports("server");
-    Policy *policy = GenericInitialize("server", config, report_context);
-    ThisAgentInit();
-    KeepPromises(policy, report_context);
-    Summarize();
-
-    StartServer(policy, config, report_context);
-
-    ReportContextDestroy(report_context);
-    return 0;
-}
+#endif // BITOPERATIONS_H

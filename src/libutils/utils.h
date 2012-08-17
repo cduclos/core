@@ -22,21 +22,23 @@
   included file COSL.txt.
 */
 
-#include "cf-serverd-functions.h"
+/*
+ * This library is a collection of utilities used in different points of
+ * the code. By having them here we can just reuse them without problems.
+ *
+ * This header file is just a simple collection point for this library.
+ * By including this header we get access to the whole functionality of the
+ * library. If that is not desired one can access each piece by only including
+ * that header file.
+ */
 
-int main(int argc, char *argv[])
-{
-    GenericAgentConfig config = GenericAgentDefaultConfig(cf_server);
-    CheckOpts(argc, argv);
+#ifndef UTILS_H
+#define UTILS_H
 
-    ReportContext *report_context = OpenReports("server");
-    Policy *policy = GenericInitialize("server", config, report_context);
-    ThisAgentInit();
-    KeepPromises(policy, report_context);
-    Summarize();
+#include "bit-operations.h"
+#include "compiler.h"
+#include "errors.h"
+#include "linkedlist.h"
+#include "logging.h"
 
-    StartServer(policy, config, report_context);
-
-    ReportContextDestroy(report_context);
-    return 0;
-}
+#endif // UTILS_H

@@ -22,21 +22,39 @@
   included file COSL.txt.
 */
 
-#include "cf-serverd-functions.h"
+#include "errors.h"
+#include "logging.h"
 
-int main(int argc, char *argv[])
+/*
+ * This function calls exit(...) so use it with extreme care
+ */
+void fatalError(char *s, ...)
 {
-    GenericAgentConfig config = GenericAgentDefaultConfig(cf_server);
-    CheckOpts(argc, argv);
+#if 0
+    CfLock best_guess;
 
-    ReportContext *report_context = OpenReports("server");
-    Policy *policy = GenericInitialize("server", config, report_context);
-    ThisAgentInit();
-    KeepPromises(policy, report_context);
-    Summarize();
+    if (s)
+    {
+        va_list ap;
+        char buf[CF_BUFSIZE] = "";
 
-    StartServer(policy, config, report_context);
+        va_start(ap, s);
+        vsnprintf(buf, CF_BUFSIZE - 1, s, ap);
+        va_end(ap);
+        CfOut(cf_error, "", "Fatal CFEngine error: %s", buf);
+    }
 
-    ReportContextDestroy(report_context);
-    return 0;
+    if (strlen(CFLOCK) > 0)
+    {
+        best_guess.lock = xstrdup(CFLOCK);
+        best_guess.last = xstrdup(CFLAST);
+        best_guess.log = xstrdup(CFLOG);
+        YieldCurrentLock(best_guess);
+    }
+
+    unlink(PIDFILE);
+    EndAudit();
+    GenericDeInitialize();
+    exit(1);
+#endif
 }

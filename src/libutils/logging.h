@@ -22,21 +22,34 @@
   included file COSL.txt.
 */
 
-#include "cf-serverd-functions.h"
+#ifndef LOGGING_H
+#define LOGGING_H
 
-int main(int argc, char *argv[])
+#include <stdarg.h>
+#include "compiler.h"
+
+/*
+ * Logging levels. The capitalization is not guidelines compliant because I didn't want
+ * to change the source code all over.
+ */
+#if 0
+enum cfreport
 {
-    GenericAgentConfig config = GenericAgentDefaultConfig(cf_server);
-    CheckOpts(argc, argv);
+    cf_inform,
+    cf_verbose,
+    cf_error,
+    cf_log,
+    cf_reporting,
+    cf_cmdout,
+    cf_noreport
+};
 
-    ReportContext *report_context = OpenReports("server");
-    Policy *policy = GenericInitialize("server", config, report_context);
-    ThisAgentInit();
-    KeepPromises(policy, report_context);
-    Summarize();
-
-    StartServer(policy, config, report_context);
-
-    ReportContextDestroy(report_context);
-    return 0;
-}
+/*
+ * These functions provide logging capabilities.
+ */
+// File output
+void CfFOut(const char *filename, const enum cfreport level, const char *errstr, const char *fmt, ...) FUNC_ATTR_PRINTF(4, 5);
+// Standard output
+void CfOut(const enum cfreport level, const char *errstr, const char *fmt, ...) FUNC_ATTR_PRINTF(3, 4);
+#endif
+#endif // LOGGING_H
