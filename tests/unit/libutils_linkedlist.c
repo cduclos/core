@@ -27,6 +27,7 @@ static void test_addToList(void **state)
     assert_int_equal(list->mLast, NULL);
     assert_int_equal(list->mNodeCount, 0);
     assert_int_equal(list->mState, 0);
+    assert_int_equal(list->destroy, NULL);
 
     char element0[] = "this is a test string";
     char element1[] = "another test string";
@@ -76,6 +77,7 @@ static void test_appendToList(void **state)
     assert_int_equal(list->mLast, NULL);
     assert_int_equal(list->mNodeCount, 0);
     assert_int_equal(list->mState, 0);
+    assert_int_equal(list->destroy, NULL);
 
     char element0[] = "this is a test string";
     char element1[] = "another test string";
@@ -121,6 +123,7 @@ static void test_removeFromList(void **state)
     assert_int_equal(list->mLast, NULL);
     assert_int_equal(list->mNodeCount, 0);
     assert_int_equal(list->mState, 0);
+    assert_int_equal(list->destroy, NULL);
 
     char element0[] = "this is a test string";
     char element1[] = "another test string";
@@ -251,6 +254,50 @@ static void test_removeFromList(void **state)
     assert_int_equal(list->mState, 8);
 
     // Now we destroy the list.
+    assert_int_equal(LinkedList_destroy(&list), 0);
+}
+
+// This function is just an example function for the destroyer
+#include <stdio.h>
+void testDestroyer(void *element) {
+    // We know the elements are just char *
+    // However we cannot free them because they are stack allocated
+    // so we just print them
+    char *s = (char *)element;
+    printf("element: %s \n", s);
+}
+
+static void test_destroyer(void **state)
+{
+    LinkedList *list = NULL;
+    assert_int_equal(LinkedList_init(&list), 0);
+    assert_int_not_equal(list, NULL);
+    assert_int_equal(list->mFirst, NULL);
+    assert_int_equal(list->mList, NULL);
+    assert_int_equal(list->mLast, NULL);
+    assert_int_equal(list->mNodeCount, 0);
+    assert_int_equal(list->mState, 0);
+    assert_int_equal(list->destroy, NULL);
+
+    // Assign the destroyer function
+    assert_int_equal(LinkedList_setDestroyer(list, testDestroyer), 0);
+
+    char element0[] = "this is a test string";
+    char element1[] = "another test string";
+    char element2[] = "yet another test string";
+    char element3[] = "and one more test string";
+    char element4[] = "non existing element";
+
+    // We add element0 to the list.
+    assert_int_equal(LinkedList_add(list, element0), 0);
+    // We add element1 to the list.
+    assert_int_equal(LinkedList_add(list, element1), 0);
+    // We add element2 to the list.
+    assert_int_equal(LinkedList_add(list, element2), 0);
+    // We add element3 to the list.
+    assert_int_equal(LinkedList_add(list, element3), 0);
+
+    // Now we try to destroy the list.
     assert_int_equal(LinkedList_destroy(&list), 0);
 }
 
@@ -446,6 +493,7 @@ int main()
         , unit_test(test_appendToList)
         , unit_test(test_removeFromList)
         , unit_test(test_iterator)
+        , unit_test(test_destroyer)
     };
 
     return run_tests(tests);

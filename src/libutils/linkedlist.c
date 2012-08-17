@@ -43,6 +43,15 @@ int LinkedList_init(LinkedList **list)
     (*list)->mLast = NULL;
     (*list)->mNodeCount = 0;
     (*list)->mState = 0;
+    (*list)->destroy = NULL;
+    return 0;
+}
+
+int LinkedList_setDestroyer(LinkedList *list, void (*destroy)(void *element))
+{
+    if (!list)
+        return -1;
+    list->destroy = destroy;
     return 0;
 }
 
@@ -50,9 +59,20 @@ int LinkedList_destroy(LinkedList **list)
 {
     if (!list || !(*list))
         return -1;
-    // If there are elements, we do not delete the list because we could be leaking memory
-    if ((*list)->mNodeCount)
+    // If there are elements, we check if we have a destroyer. If not we refuse to delete the list.
+    if ((*list)->mNodeCount && !(*list)->destroy)
         return -1;
+    // We have a destroyer or the list is empty
+    LinkedListNode *node = NULL;
+    LinkedListNode *p = NULL;
+    for (node = (*list)->mFirst; node; node = node->mNext) {
+        if (p)
+            free(p);
+        (*list)->destroy(node->mPayload);
+        p = node;
+    }
+    if (p)
+        free(p);
     free((*list));
     *list = NULL;
     return 0;

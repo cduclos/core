@@ -46,6 +46,8 @@ struct LinkedList {
     LinkedListNode *mFirst;
     // Link to the last element
     LinkedListNode *mLast;
+    // This function can be used to destroy the elements at destruction time
+    void (*destroy)(void *element);
 };
 typedef struct LinkedList LinkedList;
 struct LinkedListIterator {
@@ -56,6 +58,7 @@ struct LinkedListIterator {
 typedef struct LinkedListIterator LinkedListIterator;
 
 int LinkedList_init(LinkedList **list);
+int LinkedList_setDestroyer(LinkedList *list, void (*destroy)(void *));
 int LinkedList_destroy(LinkedList **list);
 int LinkedList_add(LinkedList *list, void *payload);
 int LinkedList_append(LinkedList *list, void *payload);
