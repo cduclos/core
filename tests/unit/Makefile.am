@@ -99,5 +99,5 @@ package_versions_compare_test_SOURCES = package_versions_compare_test.c ../../sr
 sort_test_SOURCES = sort_test.c ../../src/sort.c
 sort_test_LDADD = libtest.la
 
-libutils_linkedlist_SOURCES = libutils_linkedlist.c ../../src/libutils/linkedlist.c
+libutils_linkedlist_SOURCES = libutils_linkedlist.c ../../src/libutils/linkedlist.c ../../src/libutils/refcount.c
 libutils_linkedlist_LDADD = libtest.la

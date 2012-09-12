@@ -1,6 +1,7 @@
 #include <setjmp.h>
 #include <sys/types.h>
 #include <stdarg.h>
+#include <string.h>
 #include <cmockery.h>
 #include <libutils/linkedlist.h>
 
@@ -15,6 +16,50 @@ static void test_initList(void **state)
     assert_int_equal(list->mLast, NULL);
     assert_int_equal(list->mNodeCount, 0);
     assert_int_equal(list->mState, 0);
+}
+
+// This function is just an example function for the destroyer
+#include <stdio.h>
+void testDestroyer(void *element) {
+    // We know the elements are just char *
+    // However we cannot free them because they are stack allocated
+    // so we just print them
+    char *s = (char *)element;
+    printf("element: %s \n", s);
+}
+
+static void test_destroyer(void **state)
+{
+    LinkedList *list = NULL;
+    assert_int_equal(LinkedList_init(&list), 0);
+    assert_int_not_equal(list, NULL);
+    assert_int_equal(list->mFirst, NULL);
+    assert_int_equal(list->mList, NULL);
+    assert_int_equal(list->mLast, NULL);
+    assert_int_equal(list->mNodeCount, 0);
+    assert_int_equal(list->mState, 0);
+    assert_int_equal(list->destroy, NULL);
+
+    // Assign the destroyer function
+    assert_int_equal(LinkedList_setDestroyer(list, testDestroyer), 0);
+
+    char element0[] = "this is a test string";
+    char element1[] = "another test string";
+    char element2[] = "yet another test string";
+    char element3[] = "and one more test string";
+    char element4[] = "non existing element";
+
+    // We add element0 to the list.
+    assert_int_equal(LinkedList_add(list, element0), 0);
+    // We add element1 to the list.
+    assert_int_equal(LinkedList_add(list, element1), 0);
+    // We add element2 to the list.
+    assert_int_equal(LinkedList_add(list, element2), 0);
+    // We add element3 to the list.
+    assert_int_equal(LinkedList_add(list, element3), 0);
+
+    // Now we try to destroy the list.
+    assert_int_equal(LinkedList_destroy(&list), 0);
 }
 
 static void test_addToList(void **state)
@@ -124,6 +169,14 @@ static void test_removeFromList(void **state)
     assert_int_equal(list->mNodeCount, 0);
     assert_int_equal(list->mState, 0);
     assert_int_equal(list->destroy, NULL);
+    assert_int_equal(list->compare, NULL);
+    assert_int_equal(list->copy, NULL);
+
+
+    // Assign the compare function
+    assert_int_equal(LinkedList_setCompare(list, strcmp), 0);
+    // Assign the destroyer function
+    assert_int_equal(LinkedList_setDestroyer(list, testDestroyer), 0);
 
     char element0[] = "this is a test string";
     char element1[] = "another test string";
@@ -190,9 +243,6 @@ static void test_removeFromList(void **state)
     assert_int_equal(list->mNodeCount, 4);
     assert_int_equal(list->mState, 4);
 
-    // Now we try to destroy the list. This should fail because the list is not empty
-    assert_int_equal(LinkedList_destroy(&list), -1);
-
     // We remove the non existing element
     assert_int_equal(LinkedList_remove(list, element4), -1);
     assert_int_not_equal(list->mFirst, NULL);
@@ -257,50 +307,6 @@ static void test_removeFromList(void **state)
     assert_int_equal(LinkedList_destroy(&list), 0);
 }
 
-// This function is just an example function for the destroyer
-#include <stdio.h>
-void testDestroyer(void *element) {
-    // We know the elements are just char *
-    // However we cannot free them because they are stack allocated
-    // so we just print them
-    char *s = (char *)element;
-    printf("element: %s \n", s);
-}
-
-static void test_destroyer(void **state)
-{
-    LinkedList *list = NULL;
-    assert_int_equal(LinkedList_init(&list), 0);
-    assert_int_not_equal(list, NULL);
-    assert_int_equal(list->mFirst, NULL);
-    assert_int_equal(list->mList, NULL);
-    assert_int_equal(list->mLast, NULL);
-    assert_int_equal(list->mNodeCount, 0);
-    assert_int_equal(list->mState, 0);
-    assert_int_equal(list->destroy, NULL);
-
-    // Assign the destroyer function
-    assert_int_equal(LinkedList_setDestroyer(list, testDestroyer), 0);
-
-    char element0[] = "this is a test string";
-    char element1[] = "another test string";
-    char element2[] = "yet another test string";
-    char element3[] = "and one more test string";
-    char element4[] = "non existing element";
-
-    // We add element0 to the list.
-    assert_int_equal(LinkedList_add(list, element0), 0);
-    // We add element1 to the list.
-    assert_int_equal(LinkedList_add(list, element1), 0);
-    // We add element2 to the list.
-    assert_int_equal(LinkedList_add(list, element2), 0);
-    // We add element3 to the list.
-    assert_int_equal(LinkedList_add(list, element3), 0);
-
-    // Now we try to destroy the list.
-    assert_int_equal(LinkedList_destroy(&list), 0);
-}
-
 static void test_destroyList(void **state)
 {
     LinkedList *list = NULL;
@@ -327,6 +333,11 @@ static void test_iterator(void **state)
     assert_int_equal(list->mLast, NULL);
     assert_int_equal(list->mNodeCount, 0);
     assert_int_equal(list->mState, 0);
+
+    // Assign the compare function
+    assert_int_equal(LinkedList_setCompare(list, strcmp), 0);
+    // Assign the destroyer function
+    assert_int_equal(LinkedList_setDestroyer(list, testDestroyer), 0);
 
     char element0[] = "this is a test string";
     char element1[] = "another test string";
@@ -383,9 +394,6 @@ static void test_iterator(void **state)
     assert_true(list->mLast == element0Pointer);
     assert_int_equal(list->mNodeCount, 4);
     assert_int_equal(list->mState, 4);
-
-    // Now we try to destroy the list. This should fail because the list is not empty
-    assert_int_equal(LinkedList_destroy(&list), -1);
 
     LinkedListIterator *iterator0 = NULL;
     assert_int_equal(LinkedListIterator_get(list, &iterator0), 0);
@@ -489,11 +497,11 @@ int main()
     const UnitTest tests[] = {
         unit_test(test_initList)
         , unit_test(test_destroyList)
+        , unit_test(test_destroyer)
         , unit_test(test_addToList)
         , unit_test(test_appendToList)
         , unit_test(test_removeFromList)
         , unit_test(test_iterator)
-        , unit_test(test_destroyer)
     };
 
     return run_tests(tests);

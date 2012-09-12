@@ -20,7 +20,10 @@ libutils_la_SOURCES = \
     libutils/compiler.h \
     libutils/linkedlist.c \
     libutils/linkedlist.h \
-    libutils/linkedlist_p.h
+    libutils/linkedlist_p.h \
+    libutils/refcount.c \
+    libutils/refcount.h \
+    libutils/refcount_p.h
 
 # libpromises
 

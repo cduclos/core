@@ -27,6 +27,7 @@
 
 #include <stdlib.h>
 #include "linkedlist_p.h"
+#include "refcount.h"
 
 /*
  * This provides a double-linked list implementation.
@@ -46,8 +47,14 @@ struct LinkedList {
     LinkedListNode *mFirst;
     // Link to the last element
     LinkedListNode *mLast;
+    // This function is used to compare two elements
+    int (*compare)(void *a, void *b);
+    // This function is used whenever there is need to perform a deep copy
+    void (*copy)(void *source, void *destination);
     // This function can be used to destroy the elements at destruction time
     void (*destroy)(void *element);
+    // Reference counting
+    RefCount *mRefCount;
 };
 typedef struct LinkedList LinkedList;
 struct LinkedListIterator {
@@ -58,8 +65,11 @@ struct LinkedListIterator {
 typedef struct LinkedListIterator LinkedListIterator;
 
 int LinkedList_init(LinkedList **list);
+int LinkedList_setCompare(LinkedList *list, int (*compare)(void *, void *));
+int LinkedList_setCopy(LinkedList *list, void (*copy)(void *source, void *destination));
 int LinkedList_setDestroyer(LinkedList *list, void (*destroy)(void *));
 int LinkedList_destroy(LinkedList **list);
+int LinkedList_copy(LinkedList *origin, LinkedList **destination);
 int LinkedList_add(LinkedList *list, void *payload);
 int LinkedList_append(LinkedList *list, void *payload);
 int LinkedList_remove(LinkedList *list, void *payload);

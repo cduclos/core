@@ -29,21 +29,73 @@
 #define ChangeListState(list) \
     list->mState++
 
+/*
+ * Helper method to detach lists.
+ */
+static void LinkedList_detach(LinkedList *list)
+{
+    int shared = RefCount_isShared(list->mRefCount);
+    if (shared) {
+        /*
+         * 1. Perform a deep copy (expensive!)
+         * 2. Detach
+         */
+        LinkedListNode *p = NULL, *q = NULL, *newList = NULL;
+        for (p = list->mList; p; p = p->mNext) {
+            if (newList) {
+                q->mNext = (LinkedListNode *)malloc(sizeof(LinkedListNode));
+                q->mNext->mPrevious = q;
+                q->mNext->mNext = NULL;
+                q = q->mNext;
+                list->copy(p->mPayload, q->mPayload);
+            } else {
+                // First element
+                newList = (LinkedListNode *)malloc(sizeof(LinkedListNode));
+                newList->mNext = NULL;
+                newList->mPrevious = NULL;
+                list->copy(p->mPayload, newList->mPayload);
+                q = newList;
+            }
+        }
+        list->mList = newList;
+        // Ok, we have our own copy of the list. Now we detach.
+        RefCount_detach(list->mRefCount, list);
+        list->mRefCount = NULL;
+        RefCount_init(&list->mRefCount);
+        RefCount_attach(list->mRefCount, list);
+    }
+}
+
 int LinkedList_init(LinkedList **list)
 {
     if (!list)
         return -1;
     *list = (LinkedList *)malloc(sizeof(LinkedList));
-    if (!(*list)) {
-        // This is unlikely in Linux but other Unixes actually return NULL
-        return -1;
-    }
     (*list)->mList = NULL;
     (*list)->mFirst = NULL;
     (*list)->mLast = NULL;
     (*list)->mNodeCount = 0;
     (*list)->mState = 0;
     (*list)->destroy = NULL;
+    (*list)->copy = NULL;
+    RefCount_init(&(*list)->mRefCount);
+    RefCount_attach((*list)->mRefCount, (*list));
+    return 0;
+}
+
+int LinkedList_setCompare(LinkedList *list, int (*compare)(void *a, void *b))
+{
+    if (!list)
+        return -1;
+    list->compare = compare;
+    return 0;
+}
+
+int LinkedList_setCopy(LinkedList *list, void (*copy)(void *source, void *destination))
+{
+    if (!list)
+        return -1;
+    list->copy = copy;
     return 0;
 }
 
@@ -59,22 +111,50 @@ int LinkedList_destroy(LinkedList **list)
 {
     if (!list || !(*list))
         return -1;
-    // If there are elements, we check if we have a destroyer. If not we refuse to delete the list.
-    if ((*list)->mNodeCount && !(*list)->destroy)
-        return -1;
-    // We have a destroyer or the list is empty
-    LinkedListNode *node = NULL;
-    LinkedListNode *p = NULL;
-    for (node = (*list)->mFirst; node; node = node->mNext) {
+    int shared = RefCount_isShared((*list)->mRefCount);
+    if (!shared) {
+        // We are the only ones using the list, we can delete it.
+        // If there are elements, we check if we have a destroyer. If not we refuse to delete the list.
+        if ((*list)->mNodeCount && !(*list)->destroy)
+            return -1;
+        // We have a destroyer or the list is empty
+        LinkedListNode *node = NULL;
+        LinkedListNode *p = NULL;
+        for (node = (*list)->mFirst; node; node = node->mNext) {
+            if (p)
+                free(p);
+            (*list)->destroy(node->mPayload);
+            p = node;
+        }
         if (p)
             free(p);
-        (*list)->destroy(node->mPayload);
-        p = node;
     }
-    if (p)
-        free(p);
+    RefCount_detach((*list)->mRefCount, (*list));
     free((*list));
     *list = NULL;
+    return 0;
+}
+
+/*
+ * Copy a list. After this method the two list are shared.
+ */
+int LinkedList_copy(LinkedList *origin, LinkedList **destination)
+{
+    if (!origin || !destination)
+        return -1;
+    *destination = (LinkedList *)malloc(sizeof(LinkedList));
+    (*destination)->mList = origin->mList;
+    (*destination)->mFirst = origin->mFirst;
+    (*destination)->mLast = origin->mLast;
+    (*destination)->mNodeCount = origin->mNodeCount;
+    (*destination)->mState = origin->mState;
+    (*destination)->destroy = origin->destroy;
+    (*destination)->copy = origin->copy;
+    (*destination)->compare = origin->compare;
+    int result = RefCount_attach(origin->mRefCount, (*destination));
+    if (result < 0)
+        return -1;
+    (*destination)->mRefCount = origin->mRefCount;
     return 0;
 }
 
@@ -88,11 +168,8 @@ int LinkedList_add(LinkedList *list, void *payload)
     LinkedListNode *node = NULL;
     if (!list)
         return -1;
+    LinkedList_detach(list);
     node = (LinkedListNode *)malloc(sizeof(LinkedListNode));
-    if (!node) {
-        // This is unlikely in Linux but other Unixes actually return NULL
-        return -1;
-    }
     node->mPayload = payload;
     node->mPrevious = NULL;
     if (list->mList) {
@@ -121,6 +198,7 @@ int LinkedList_append(LinkedList *list, void *payload)
     LinkedListNode *node = NULL;
     if (!list)
         return -1;
+    LinkedList_detach(list);
     node = (LinkedListNode *)malloc(sizeof(LinkedListNode));
     if (!node) {
         // This is unlikely in Linux but other Unixes actually return NULL
@@ -155,16 +233,25 @@ int LinkedList_remove(LinkedList *list, void *payload)
     LinkedListNode *node = NULL;
     int found = 0;
     for (node = list->mList; node; node = node->mNext) {
-        if (node->mPayload == payload) {
+        if (!list->compare(node->mPayload, payload)) {
             found = 1;
             break;
         }
     }
     if (!found)
         return -1;
+    LinkedList_detach(list);
+    node = NULL;
+    // We need to find the node again since we have a new list
+    for (node = list->mList; node; node = node->mNext) {
+        if (!list->compare(node->mPayload, payload)) {
+            found = 1;
+            break;
+        }
+    }
+
     /*
      * We found the node, we just need to change the pointers.
-     * We do not clean the memory used by the payload, but we clean the node element.
      */
     if (node->mNext && node->mPrevious) {
         // Middle of the list
@@ -185,6 +272,7 @@ int LinkedList_remove(LinkedList *list, void *payload)
         list->mFirst = NULL;
         list->mLast = NULL;
     }
+    list->destroy(node->mPayload);
     free(node);
     list->mNodeCount--;
     ChangeListState(list);
