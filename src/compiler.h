@@ -45,4 +45,11 @@
 # define FUNC_ATTR_PRINTF(string_index, first_to_check)
 #endif
 
+#if defined(__GNUC__)
+#  define FUNC_DEPRECATED \
+    __attribute__((deprecated))
+#else
+#  define FUNC_DEPRECATED(warning_text)
+#endif
+
 #endif

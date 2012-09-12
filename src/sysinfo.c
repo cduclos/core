@@ -296,7 +296,11 @@ void GetNameInfo3()
 
     for (i = 0; i < HARD_CLASSES_MAX; i++)
     {
-        if (FullTextMatch(CLASSATTRIBUTES[i][0], ToLowerStr(VSYSNAME.sysname)))
+        char sysname[CF_BUFSIZE];
+        strlcpy(sysname, VSYSNAME.sysname, CF_BUFSIZE);
+        ToLowerStrInplace(sysname);
+
+        if (FullTextMatch(CLASSATTRIBUTES[i][0], sysname))
         {
             if (FullTextMatch(CLASSATTRIBUTES[i][1], VSYSNAME.machine))
             {
@@ -1981,10 +1985,7 @@ static int Xen_Hv_Check(void)
     {
         uint32_t u[3];
         char s[13];
-    } sig =
-    {
-        {
-    0}};
+    } sig = {{0}};
 
     Xen_Cpuid(0x40000000, &eax, &sig.u[0], &sig.u[1], &sig.u[2]);
 

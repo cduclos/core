@@ -2135,11 +2135,10 @@ static FnCallResult FnCallTranslatePath(FnCall *fp, Rlist *finalargs)
 
 static FnCallResult FnCallRegistryValue(FnCall *fp, Rlist *finalargs)
 {
-    char buffer[CF_BUFSIZE];
-
-    buffer[0] = '\0';
-
 /* begin fn specific content */
+
+#if defined(__MINGW32__)
+    char buffer[CF_BUFSIZE] = "";
 
     if (GetRegistryValue(ScalarValue(finalargs), ScalarValue(finalargs->next), buffer, sizeof(buffer)))
     {
@@ -2149,7 +2148,9 @@ static FnCallResult FnCallRegistryValue(FnCall *fp, Rlist *finalargs)
     {
         return (FnCallResult) { FNCALL_FAILURE };
     }
-
+#else
+    return (FnCallResult) { FNCALL_FAILURE };
+#endif
 }
 
 /*********************************************************************/
@@ -3401,6 +3402,11 @@ static FnCallResult FnCallSplitString(FnCall *fp, Rlist *finalargs)
 // Read once to validate structure of file in itemlist
 
     newlist = SplitRegexAsRList(string, split, max, true);
+
+    if (newlist == NULL)
+    {
+        PrependRScalar(&newlist, "cf_null", CF_SCALAR);
+    }
 
     return (FnCallResult) { FNCALL_SUCCESS, { newlist, CF_LIST } };
 }

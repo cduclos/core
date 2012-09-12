@@ -117,30 +117,6 @@ void ShowTopicRepresentation(const ReportContext *report_context)
     CfOut(cf_verbose, "", "# Knowledge map reporting feature is only available in version Nova and above\n");
 }
 
-void VerifyOutputsPromise(Promise *pp)
-{
-    printf(" !! Outputs promises are not available in the community edition of Cfengine\n");
-}
-
-void SetPromiseOutputs(Promise *pp)
-{
-}
-
-
-/* cf-agent, cf-serverd */
-
-
-void SetSyslogHost(const char *host)
-{
-    CfOut(cf_error, "", "!! Remote syslog functionality is only available in Nova");
-}
-
-void SetSyslogPort(uint16_t port)
-{
-    CfOut(cf_error, "", "!! Remote syslog functionality is only available in Nova");
-}
-
-
 /* cf-execd: cf-execd-runner.c */
 
 
@@ -199,20 +175,6 @@ void LogFileChange(char *file, int change, Attributes a, Promise *pp, const Repo
     CfOut(cf_verbose, "", "Logging file differences requires version Nova or above");
 }
 
-void VerifyACL(char *file, Attributes a, Promise *pp)
-{
-    CfOut(cf_verbose, "", "Verifying ACL promises is only available with Cfengine Nova or above");
-}
-
-
-/* cf-agent: transaction.c */
-
-
-void RemoteSysLog(int log_priority, const char *log_string)
-{
-    CfOut(cf_verbose, "", "Remote logging requires version Nova or above");
-}
-
 
 /* cf-agent: cf-agent.c */
 
@@ -222,14 +184,6 @@ void NoteEfficiency(double e)
 }
 
 void LastSawBundle(const Bundle *bundle, double comp)
-{
-}
-
-void SetBundleOutputs(char *name)
-{
-}
-
-void ResetBundleOutputs(char *name)
 {
 }
 
@@ -263,10 +217,12 @@ int RetrieveUnreliableValue(char *caller, char *handle, char *buffer)
     return false;
 }
 
+#if defined(__MINGW32__)
 int GetRegistryValue(char *key, char *name, char *buf, int bufSz)
 {
     return 0;
 }
+#endif
 
 void *CfLDAPValue(char *uri, char *dn, char *filter, char *name, char *scope, char *sec)
 {
@@ -302,9 +258,11 @@ bool CFDB_HostsWithClass(Rlist **return_list, char *class_name, char *return_for
 /* cf-agent: verify_databases.c */
 
 
+#if defined(__MINGW32__)
 void VerifyRegistryPromise(Attributes a, Promise *pp)
 {
 }
+#endif
 
 
 /* cf-agent: verify_services.c */

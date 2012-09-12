@@ -164,7 +164,9 @@ int IsTCPType(char *s);
 /* enterprise_stubs.c */
 
 void SyntaxExport(void);
+#if defined(__MINGW32__)
 void VerifyRegistryPromise(Attributes a, Promise *pp);
+#endif
 int CfSessionKeySize(char c);
 char CfEnterpriseOptions(void);
 const EVP_CIPHER *CfengineCipher(char type);
@@ -197,9 +199,7 @@ void SummarizeValue(int xml, int html, int csv, int embed, char *stylesheet, cha
 void VerifyMeasurement(double *this, Attributes a, Promise *pp);
 void SetMeasurementPromises(Item **classlist);
 void LongHaul(time_t current);
-void VerifyACL(char *file, Attributes a, Promise *pp);
 void LogFileChange(char *file, int change, Attributes a, Promise *pp, const ReportContext *report_context);
-void RemoteSysLog(int log_priority, const char *log_string);
 void ReportPatches(PackageManager *list);
 void SummarizeSoftware(int xml, int html, int csv, int embed, char *stylesheet, char *head, char *foot, char *web);
 void SummarizeUpdates(int xml, int html, int csv, int embed, char *stylesheet, char *head, char *foot, char *web);
@@ -212,7 +212,9 @@ int ReturnLiteralData(char *handle, char *ret);
 char *GetRemoteScalar(char *proto, char *handle, char *server, int encrypted, char *rcv);
 const char *PromiseID(const Promise *pp);     /* Not thread-safe */
 void NotePromiseCompliance(const Promise *pp, double val, PromiseState state, char *reasoin);
+#if defined(__MINGW32__)
 int GetRegistryValue(char *key, char *name, char *buf, int bufSz);
+#endif
 void NoteVarUsage(void);
 void NoteVarUsageDB(void);
 void SummarizeVariables(int xml, int html, int csv, int embed, char *stylesheet, char *head, char *foot, char *web);
@@ -226,19 +228,12 @@ int RetrieveUnreliableValue(char *caller, char *handle, char *buffer);
 void TranslatePath(char *new, const char *old);
 void GrandSummary(void);
 void TrackValue(char *date, double kept, double repaired, double notkept);
-void SetBundleOutputs(char *name);
-void ResetBundleOutputs(char *name);
-void SetPromiseOutputs(Promise *pp);
-void VerifyOutputsPromise(Promise *pp);
 void LastSawBundle(const Bundle *bundle, double compliance);
 void NewPromiser(Promise *pp);
 void AnalyzePromiseConflicts(void);
 void AddGoalsToDB(char *goal_patterns);
 void VerifyWindowsService(Attributes a, Promise *pp);
 bool CFDB_HostsWithClass(Rlist **return_list, char *class_name, char *return_format);
-
-void SetSyslogHost(const char *host);
-void SetSyslogPort(uint16_t port);
 
 void SyntaxCompletion(char *s);
 void TryCollectCall(void);
@@ -269,7 +264,8 @@ void ArgFree(char **args);
 /* files_copy.c */
 
 void *CopyFileSources(char *destination, Attributes attr, Promise *pp, const ReportContext *report_context);
-int CopyRegularFileDisk(char *source, char *new, Attributes attr, Promise *pp);
+bool CopyRegularFileDiskReport(char *source, char *destination, Attributes attr, Promise *pp);
+bool CopyRegularFileDisk(char *source, char *destination, bool make_holes);
 void CheckForFileHoles(struct stat *sstat, Promise *pp);
 int FSWrite(char *new, int dd, char *buf, int towrite, int *last_write_made_hole, int n_read, Attributes attr,
             Promise *pp);
@@ -366,6 +362,7 @@ void LogHashChange(char *file, FileState status, char *msg);
 
 /* files_properties.c */
 
+void AddFilenameToListOfSuspicious(const char *filename);
 int ConsiderFile(const char *nodename, char *path, Attributes attr, Promise *pp);
 void SetSearchDevice(struct stat *sb, Promise *pp);
 int DeviceBoundary(struct stat *sb, Promise *pp);
@@ -487,7 +484,7 @@ void AuditStatusMessage(Writer *writer, char status);
 
 /* manual.c */
 
-void TexinfoManual(char *mandir);
+void TexinfoManual(const char *source_dir, const char *output_file);
 
 /* matching.c */
 
@@ -588,7 +585,7 @@ void DeleteScope(char *name);
 Scope *GetScope(const char *scope);
 void CopyScope(const char *new_scopename, const char *old_scopename);
 void DeleteAllScope(void);
-void AugmentScope(char *scope, Rlist *lvals, Rlist *rvals);
+void AugmentScope(char *scope, char *ns, Rlist *lvals, Rlist *rvals);
 void DeleteFromScope(char *scope, Rlist *args);
 void PushThisScope(void);
 void PopThisScope(void);
@@ -714,6 +711,13 @@ void VerifyMeasurementPromise(double *this, Promise *pp);
 
 void VerifyMethodsPromise(Promise *pp, const ReportContext *report_context);
 int VerifyMethod(char *attrname, Attributes a, Promise *pp, const ReportContext *report_context);
+
+/* verify_outputs.c */
+
+void VerifyOutputsPromise(Promise *pp);
+void SetPromiseOutputs(Promise *pp);
+void SetBundleOutputs(char *name);
+void ResetBundleOutputs(char *name);
 
 /* verify_packages.c */
 

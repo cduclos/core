@@ -341,7 +341,6 @@ int OpenReceiverChannel(void)
 {
     int sd;
     int yes = 1;
-    char *ptr = NULL;
 
     struct linger cflinger;
 
@@ -355,6 +354,7 @@ int OpenReceiverChannel(void)
     cflinger.l_linger = 60;
 
 #if defined(HAVE_GETADDRINFO)
+    char *ptr = NULL;
 
     memset(&query, 0, sizeof(struct addrinfo));
 

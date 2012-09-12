@@ -1220,7 +1220,6 @@ static int VerifyConnection(ServerConnectionState *conn, char buf[CF_BUFSIZE])
     char ipstring[CF_MAXVARSIZE], fqname[CF_MAXVARSIZE], username[CF_MAXVARSIZE];
     char dns_assert[CF_MAXVARSIZE], ip_assert[CF_MAXVARSIZE];
     int matched = false;
-    struct passwd *pw;
 
 #if defined(HAVE_GETADDRINFO)
     struct addrinfo query, *response = NULL, *ap;
@@ -1230,7 +1229,6 @@ static int VerifyConnection(ServerConnectionState *conn, char buf[CF_BUFSIZE])
     int i, j;
     socklen_t len = sizeof(struct sockaddr_in);
     struct hostent *hp = NULL;
-    Item *ip_aliases = NULL, *ip_addresses = NULL;
 #endif
 
     CfDebug("Connecting host identifies itself as %s\n", buf);
@@ -1245,7 +1243,9 @@ static int VerifyConnection(ServerConnectionState *conn, char buf[CF_BUFSIZE])
 
     ThreadLock(cft_system);
 
-    strncpy(dns_assert, ToLowerStr(fqname), CF_MAXVARSIZE - 1);
+    strlcpy(dns_assert, fqname, CF_MAXVARSIZE);
+    ToLowerStrInplace(dns_assert);
+
     strncpy(ip_assert, ipstring, CF_MAXVARSIZE - 1);
 
     ThreadUnlock(cft_system);
@@ -1271,6 +1271,7 @@ static int VerifyConnection(ServerConnectionState *conn, char buf[CF_BUFSIZE])
 
 #else /* NOT MINGW */
 
+        struct passwd *pw;
         if ((pw = getpwnam(username)) == NULL)  /* Keep this inside mutex */
         {
             conn->uid = -2;
@@ -3125,7 +3126,7 @@ static int TransferRights(char *filename, int sd, ServerFileGetState *args, char
 
     if (GetNamedSecurityInfo
         (filename, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, (PSID *) & ownerSid, NULL, NULL, NULL,
-         &secDesc) == ERROR_SUCCESS)
+         (void **)&secDesc) == ERROR_SUCCESS)
     {
         if (IsValidSid((args->connect)->sid) && EqualSid(ownerSid, (args->connect)->sid))
         {
@@ -3381,37 +3382,3 @@ static int cfscanf(char *in, int len1, int len2, char *out1, char *out2, char *o
 
     return (len1 + len2 + len3 + 2);
 }
-
-/***************************************************************/
-
-#if !defined(HAVE_GETADDRINFO)
-in_addr_t GetInetAddr(char *host)
-{
-    struct in_addr addr;
-    struct hostent *hp;
-
-    addr.s_addr = inet_addr(host);
-
-    if ((addr.s_addr == INADDR_NONE) || (addr.s_addr == 0))
-    {
-        if ((hp = gethostbyname(host)) == 0)
-        {
-            FatalError("host not found: %s", host);
-        }
-
-        if (hp->h_addrtype != AF_INET)
-        {
-            FatalError("unexpected address family: %d\n", hp->h_addrtype);
-        }
-
-        if (hp->h_length != sizeof(addr))
-        {
-            FatalError("unexpected address length %d\n", hp->h_length);
-        }
-
-        memcpy((char *) &addr, hp->h_addr, hp->h_length);
-    }
-
-    return (addr.s_addr);
-}
-#endif
