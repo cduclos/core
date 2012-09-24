@@ -50,6 +50,7 @@ check_PROGRAMS = \
 	sort_test \
     file_name_test \
     logging_test \
+    granules_test \
     libutils_linkedlist
 
 TESTS = $(check_PROGRAMS)
