@@ -38,7 +38,10 @@ void RefCount_init(RefCount **ref)
 void RefCount_destroy(RefCount **ref)
 {
     if (ref && *ref) {
-        // Destroy the list of users!
+        // Don't destroy the refCount if it is still in use by somebody else.
+        if ((*ref)->mUserCount > 1) {
+            return;
+        }
         free(*ref);
         *ref = NULL;
     }
@@ -100,12 +103,29 @@ int RefCount_isShared(RefCount *ref)
 {
     if (!ref)
         return 0;
+    if (ref->mUserCount == 0)
+        return 0;
     return (ref->mUserCount != 1);
 }
 
 int RefCount_isEqual(RefCount *a, RefCount *b)
 {
-    if (a != b)
-        return 0;
-    return 1;
+    if (a == b)
+        return 1;
+    if (a && b) {
+        // Compare the inner elements
+        if (a->mUserCount == b->mUserCount) {
+            RefCountNode *na = a->mUsers;
+            RefCountNode *nb = b->mUsers;
+            while (na && nb) {
+                if (na->mUser != nb->mUser) {
+                    break;
+                }
+                na = na->mNext;
+                nb = nb->mNext;
+            }
+            return 1;
+        }
+    }
+    return 0;
 }

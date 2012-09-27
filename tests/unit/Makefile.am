@@ -51,6 +51,7 @@ check_PROGRAMS = \
     file_name_test \
     logging_test \
     granules_test \
+    libutils_refcount \
     libutils_linkedlist
 
 TESTS = $(check_PROGRAMS)
@@ -103,3 +104,7 @@ sort_test_LDADD = libtest.la
 
 libutils_linkedlist_SOURCES = libutils_linkedlist.c ../../src/libutils/linkedlist.c ../../src/libutils/refcount.c
 libutils_linkedlist_LDADD = libtest.la
+
+libutils_refcount_SOURCES = libutils_refcount.c ../../src/libutils/refcount.c
+libutils_refcount_LDADD = libtest.la
+
