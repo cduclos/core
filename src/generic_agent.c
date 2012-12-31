@@ -51,6 +51,8 @@
 #include "logging.h"
 #include "string_lib.h"
 
+#include <libcfinternals-3.4/cfinternals/audit.h>
+
 #ifdef HAVE_NOVA
 #include "nova-reporting.h"
 #else
@@ -1548,6 +1550,7 @@ static void VerifyPromises(Policy *policy, Rlist *bundlesequence,
 
 static void PrependAuditFile(char *file)
 {
+#if 0
     struct stat statbuf;
 
     AUDITPTR = xmalloc(sizeof(Audit));
@@ -1566,6 +1569,19 @@ static void PrependAuditFile(char *file)
     Chop(AUDITPTR->date);
     AUDITPTR->version = NULL;
     VAUDIT = AUDITPTR;
+#endif
+    Audit *audit = NULL;
+    Audit_init(&audit);
+    struct stat statbuf;
+    if (cfstat(file, &statbuf) == -1)
+    {
+        /* shouldn't happen */
+        return;
+    }
+    char *digest = NULL;
+    Audit_setFilename(audit, file);
+    Audit_setDate();
+    Audit_prepend(audit);
 }
 
 /*******************************************************************/
