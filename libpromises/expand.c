@@ -1215,7 +1215,7 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
           }
        else
           {
-           CarlosDebug("scope contains :")
+           CarlosDebug("scope contains :");
           strcpy(qualified_scope, scope);
           }
        }
