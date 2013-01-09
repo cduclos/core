@@ -1070,7 +1070,7 @@ static void SetAnyMissingDefaults(Promise *pp)
 /*********************************************************************/
 /* General                                                           */
 /*********************************************************************/
-#define CarlosDebug(x)  printf("%s [ %s ]: %d -- %s \n", __FILE__, __FUNCTION__, __LINE__, x)
+
 void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
 {
     Constraint *cp, *cp_save = NULL;
@@ -1079,17 +1079,17 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
     Rlist *rp;
     Rval retval;
     Rval rval = { NULL, 'x' };  /* FIXME: why this needs to be initialized? */
-    CarlosDebug("entering");
+
     if (pp->done)
     {
         return;
     }
-    CarlosDebug("pp->done");
+
     if (IsExcluded(pp->classes, pp->namespace))
     {
         return;
     }
-    CarlosDebug("IsExcluded");
+
     for (cp = pp->conlist; cp != NULL; cp = cp->next)
     {
         if (strcmp(cp->lval, "comment") == 0)
@@ -1174,7 +1174,7 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
             cp_save = cp;
         }
     }
-    CarlosDebug("After big loop");
+
     cp = cp_save;
 
     if (cp == NULL)
@@ -1183,46 +1183,39 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
         PromiseRef(cf_inform, pp);
         return;
     }
-    CarlosDebug("cp == NULL");
+
     if (i > 2)
     {
         CfOut(cf_error, "", "Variable \"%s\" breaks its own promise with multiple values (code %d)", pp->promiser, i);
         PromiseRef(cf_error, pp);
         return;
     }
-    CarlosDebug("i > 2");
-//More consideration needs to be given to using these
-//a.transaction = GetTransactionConstraints(pp);
+
+    //More consideration needs to be given to using these
+    //a.transaction = GetTransactionConstraints(pp);
     a.classes = GetClassDefinitionConstraints(pp);
-    CarlosDebug("GetClassDefinitionConstraints");
+
     enum cfdatatype existing_var = GetVariable(scope, pp->promiser, &retval);
-    CarlosDebug("GetVariable");
+
     char *qualified_scope = NULL;
-    CarlosDebug(pp->namespace);
-    CarlosDebug(scope);
     if (strcmp(pp->namespace, "default") == 0)
-       {
-        CarlosDebug("strcmp(pp->namespace, default)");
+    {
         qualified_scope = (char *)xmalloc(strlen(scope) + 1);
-       strcpy(qualified_scope, scope);
-       }
+        strcpy(qualified_scope, scope);
+    }
     else
-       {
-        CarlosDebug("pp->namespace != default");
-       if (strchr(scope, ':') == NULL)
-          {
-           CarlosDebug("scope does not contain :");
-           qualified_scope = (char *)xmalloc(strlen(pp->namespace) + strlen(scope) + 1);
-          snprintf(qualified_scope, CF_MAXVARSIZE, "%s:%s", pp->namespace, scope);
-          }
-       else
-          {
-           CarlosDebug("scope contains :");
-           qualified_scope = (char *)xmalloc(strlen(scope) + 1);
-          strcpy(qualified_scope, scope);
-          }
-       }
-    CarlosDebug("strcmp(pp->namespace)");
+    {
+        if (strchr(scope, ':') == NULL)
+        {
+            qualified_scope = (char *)xmalloc(strlen(pp->namespace) + strlen(scope) + 1);
+            snprintf(qualified_scope, CF_MAXVARSIZE, "%s:%s", pp->namespace, scope);
+        }
+        else
+        {
+            qualified_scope = (char *)xmalloc(strlen(scope) + 1);
+            strcpy(qualified_scope, scope);
+        }
+    }
     if (rval.item != NULL)
     {
         FnCall *fp = (FnCall *) rval.item;
@@ -1230,10 +1223,10 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
         if (cp->rval.rtype == CF_FNCALL)
         {
             if (existing_var != cf_notype)
-               {
-               // Already did this
-               return;
-               }
+            {
+                // Already did this
+                return;
+            }
 
             FnCallResult res = EvaluateFunctionCall(fp, pp);
 
@@ -1256,113 +1249,105 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
             {
                 snprintf(conv, CF_MAXVARSIZE, "%ld", Str2Int(cp->rval.item));
                 rval = CopyRvalItem((Rval) {conv, cp->rval.rtype});
-            }
-            else if (strcmp(cp->lval, "real") == 0)
-            {
-                snprintf(conv, CF_MAXVARSIZE, "%lf", Str2Double(cp->rval.item));
-                rval = CopyRvalItem((Rval) {conv, cp->rval.rtype});
-            }
-            else
-            {
-                rval = CopyRvalItem(cp->rval);
-            }
         }
-        CarlosDebug("rval.item != NULL");
-        if (Epimenides(pp->promiser, rval, 0))
+        else if (strcmp(cp->lval, "real") == 0)
         {
-            CfOut(cf_error, "", "Variable \"%s\" contains itself indirectly - an unkeepable promise", pp->promiser);
-            exit(1);
-        }
-        else
-        {
-            /* See if the variable needs recursively expanding again */
-
-            Rval returnval = EvaluateFinalRval(qualified_scope, rval, true, pp);
-
-            DeleteRvalItem(rval);
-
-            // freed before function exit
-            rval = returnval;
-        }
-        CarlosDebug("Epimenides(pp->promiser)");
-        if (existing_var != cf_notype)
-        {
-            if (ok_redefine)    /* only on second iteration, else we ignore broken promises */
-            {
-                DeleteVariable(qualified_scope, pp->promiser);
-            }
-            else if ((THIS_AGENT_TYPE == AGENT_TYPE_COMMON) && (CompareRval(retval, rval) == false))
-            {
-                switch (rval.rtype)
-                {
-                    char valbuf[CF_BUFSIZE];
-
-                case CF_SCALAR:
-                    CfOut(cf_verbose, "", " !! Redefinition of a constant scalar \"%s\" (was %s now %s)",
-                          pp->promiser, ScalarRvalValue(retval), ScalarRvalValue(rval));
-                    PromiseRef(cf_verbose, pp);
-                    break;
-                case CF_LIST:
-                    CfOut(cf_verbose, "", " !! Redefinition of a constant list \"%s\".", pp->promiser);
-                    PrintRlist(valbuf, CF_BUFSIZE, retval.item);
-                    CfOut(cf_verbose, "", "Old value: %s", valbuf);
-                    PrintRlist(valbuf, CF_BUFSIZE, rval.item);
-                    CfOut(cf_verbose, "", " New value: %s", valbuf);
-                    PromiseRef(cf_verbose, pp);
-                    break;
-                }
-            }
-        }
-        CarlosDebug("existing_var");
-        if (IsCf3VarString(pp->promiser))
-        {
-            // Unexpanded variables, we don't do anything with
-            DeleteRvalItem(rval);
-            return;
-        }
-        CarlosDebug("IsCf3VarString(pp->promiser)");
-        if (!FullTextMatch("[a-zA-Z0-9_\200-\377.]+(\\[.+\\])*", pp->promiser))
-        {
-            CfOut(cf_error, "", " !! Variable identifier contains illegal characters");
-            PromiseRef(cf_error, pp);
-            DeleteRvalItem(rval);
-            return;
-        }
-        CarlosDebug("!FullTextMatch");
-        if (drop_undefined && rval.rtype == CF_LIST)
-        {
-            for (rp = rval.item; rp != NULL; rp = rp->next)
-            {
-                if (IsNakedVar(rp->item))
-                {
-                    free(rp->item);
-                    rp->item = xstrdup(CF_NULL_VALUE);
-                }
-            }
-        }
-        CarlosDebug("drop_undefined");
-        if (!AddVariableHash(qualified_scope, pp->promiser, rval, Typename2Datatype(cp->lval),
-                             cp->audit->filename, cp->offset.line))
-        {
-            CfOut(cf_verbose, "", "Unable to converge %s.%s value (possibly empty or infinite regression)\n", qualified_scope, pp->promiser);
-            PromiseRef(cf_verbose, pp);
-            cfPS(cf_noreport, CF_FAIL, "", pp, a, " !! Couldn't add variable %s", pp->promiser);
-        }
-        else
-        {
-            cfPS(cf_noreport, CF_CHG, "", pp, a, " -> Added variable %s", pp->promiser);
-        }
-        CarlosDebug("!AddVariableHash");
+            snprintf(conv, CF_MAXVARSIZE, "%lf", Str2Double(cp->rval.item));
+            rval = CopyRvalItem((Rval) {conv, cp->rval.rtype});
     }
     else
     {
-        CfOut(cf_error, "", " !! Variable %s has no promised value\n", pp->promiser);
-        CfOut(cf_error, "", " !! Rule from %s at/before line %zu\n", cp->audit->filename, cp->offset.line);
-        cfPS(cf_noreport, CF_FAIL, "", pp, a, " !! Couldn't add variable %s", pp->promiser);
+        rval = CopyRvalItem(cp->rval);
     }
+}
+if (Epimenides(pp->promiser, rval, 0))
+{
+    CfOut(cf_error, "", "Variable \"%s\" contains itself indirectly - an unkeepable promise", pp->promiser);
+    exit(1);
+}
+else
+{
+/* See if the variable needs recursively expanding again */
 
+Rval returnval = EvaluateFinalRval(qualified_scope, rval, true, pp);
+
+DeleteRvalItem(rval);
+
+// freed before function exit
+rval = returnval;
+}
+if (existing_var != cf_notype)
+{
+    if (ok_redefine)    /* only on second iteration, else we ignore broken promises */
+    {
+        DeleteVariable(qualified_scope, pp->promiser);
+    }
+    else if ((THIS_AGENT_TYPE == AGENT_TYPE_COMMON) && (CompareRval(retval, rval) == false))
+    {
+        switch (rval.rtype)
+        {
+        char valbuf[CF_BUFSIZE];
+
+        case CF_SCALAR:
+            CfOut(cf_verbose, "", " !! Redefinition of a constant scalar \"%s\" (was %s now %s)",
+                  pp->promiser, ScalarRvalValue(retval), ScalarRvalValue(rval));
+            PromiseRef(cf_verbose, pp);
+            break;
+        case CF_LIST:
+            CfOut(cf_verbose, "", " !! Redefinition of a constant list \"%s\".", pp->promiser);
+            PrintRlist(valbuf, CF_BUFSIZE, retval.item);
+            CfOut(cf_verbose, "", "Old value: %s", valbuf);
+            PrintRlist(valbuf, CF_BUFSIZE, rval.item);
+            CfOut(cf_verbose, "", " New value: %s", valbuf);
+            PromiseRef(cf_verbose, pp);
+            break;
+        }
+    }
+}
+if (IsCf3VarString(pp->promiser))
+{
+    // Unexpanded variables, we don't do anything with
     DeleteRvalItem(rval);
-    CarlosDebug("DeleteRvalItem");
+    return;
+}
+if (!FullTextMatch("[a-zA-Z0-9_\200-\377.]+(\\[.+\\])*", pp->promiser))
+{
+    CfOut(cf_error, "", " !! Variable identifier contains illegal characters");
+    PromiseRef(cf_error, pp);
+    DeleteRvalItem(rval);
+    return;
+}
+if (drop_undefined && rval.rtype == CF_LIST)
+{
+    for (rp = rval.item; rp != NULL; rp = rp->next)
+    {
+        if (IsNakedVar(rp->item))
+        {
+            free(rp->item);
+            rp->item = xstrdup(CF_NULL_VALUE);
+        }
+    }
+}
+if (!AddVariableHash(qualified_scope, pp->promiser, rval, Typename2Datatype(cp->lval),
+                     cp->audit->filename, cp->offset.line))
+{
+    CfOut(cf_verbose, "", "Unable to converge %s.%s value (possibly empty or infinite regression)\n", qualified_scope, pp->promiser);
+    PromiseRef(cf_verbose, pp);
+    cfPS(cf_noreport, CF_FAIL, "", pp, a, " !! Couldn't add variable %s", pp->promiser);
+}
+else
+{
+cfPS(cf_noreport, CF_CHG, "", pp, a, " -> Added variable %s", pp->promiser);
+}
+}
+else
+{
+CfOut(cf_error, "", " !! Variable %s has no promised value\n", pp->promiser);
+CfOut(cf_error, "", " !! Rule from %s at/before line %zu\n", cp->audit->filename, cp->offset.line);
+cfPS(cf_noreport, CF_FAIL, "", pp, a, " !! Couldn't add variable %s", pp->promiser);
+}
+
+DeleteRvalItem(rval);
 }
 
 /*********************************************************************/
