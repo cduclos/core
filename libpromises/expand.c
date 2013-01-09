@@ -28,7 +28,7 @@
 /*  Variable expansion in cf3                                        */
 /*                                                                   */
 /*********************************************************************/
-
+#include <stdio.h>
 #include "expand.h"
 
 #include "env_context.h"
@@ -1070,7 +1070,7 @@ static void SetAnyMissingDefaults(Promise *pp)
 /*********************************************************************/
 /* General                                                           */
 /*********************************************************************/
-
+#define CarlosDebug(x)  printf("%s [ %s ]: %d -- %s \n", __FILE__, __FUNCTION__, __LINENO__, x)
 void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
 {
     Constraint *cp, *cp_save = NULL;
@@ -1079,17 +1079,17 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
     Rlist *rp;
     Rval retval;
     Rval rval = { NULL, 'x' };  /* FIXME: why this needs to be initialized? */
-
+    CarlosDebug("entering");
     if (pp->done)
     {
         return;
     }
-
+    CarlosDebug("pp->done");
     if (IsExcluded(pp->classes, pp->namespace))
     {
         return;
     }
-
+    CarlosDebug("IsExcluded");
     for (cp = pp->conlist; cp != NULL; cp = cp->next)
     {
         if (strcmp(cp->lval, "comment") == 0)
@@ -1174,7 +1174,7 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
             cp_save = cp;
         }
     }
-
+    CarlosDebug("After big loop");
     cp = cp_save;
 
     if (cp == NULL)

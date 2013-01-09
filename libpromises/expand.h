@@ -76,8 +76,11 @@ bool IsNakedVar(const char *str);
   @brief Eliminates decoration from a variable.
 
   Eliminating decorations from a variable means removing the extra characters at the beginning and at
-  the end. This function assumes that all variables are valid and that no NULL pointers are passed to
-  it. It is also important to take into account that this function calls IsNakedVar, since it needs to
+  the end.
+  This function assumes that all variables are valid and that no NULL pointers are passed to
+  it. Not only that, this function assumes that s1 is at least of size CF_MAXVARSIZE and we call memset
+  on s1. We might be overwritting data without realizing it.
+  It is also important to take into account that this function calls IsNakedVar, since it needs to
   check if a variable is naked before attempting to remove the decorations from it.
   @param [out] s1 Destination char * where the naked variable will be stored.
   @param [in] s2 Source char * containing the variable with its decorations.
