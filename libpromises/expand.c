@@ -1197,12 +1197,13 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
     CarlosDebug("GetClassDefinitionConstraints");
     enum cfdatatype existing_var = GetVariable(scope, pp->promiser, &retval);
     CarlosDebug("GetVariable");
-    char qualified_scope[CF_MAXVARSIZE];
+    char *qualified_scope = NULL;
     CarlosDebug(pp->namespace);
     CarlosDebug(scope);
     if (strcmp(pp->namespace, "default") == 0)
        {
         CarlosDebug("strcmp(pp->namespace, default)");
+        qualified_scope = (char *)xmalloc(strlen(scope) + 1);
        strcpy(qualified_scope, scope);
        }
     else
@@ -1211,11 +1212,13 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
        if (strchr(scope, ':') == NULL)
           {
            CarlosDebug("scope does not contain :");
+           qualified_scope = (char *)xmalloc(strlen(pp->namespace) + strlen(scope) + 1);
           snprintf(qualified_scope, CF_MAXVARSIZE, "%s:%s", pp->namespace, scope);
           }
        else
           {
            CarlosDebug("scope contains :");
+           qualified_scope = (char *)xmalloc(strlen(scope) + 1);
           strcpy(qualified_scope, scope);
           }
        }
