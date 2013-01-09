@@ -1,6 +1,5 @@
 #include "test.h"
 #include "expand.h"
-#include "expand.c"
 
 static void GetNaked_test(void **state)
 {
