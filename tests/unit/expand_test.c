@@ -51,7 +51,7 @@ static void GetNaked_test(void **state)
 int main()
 {
     const UnitTest tests[] = {
-        GetNaked_test
+        unit_test(GetNaked_test)
     };
     return run_tests(tests);
 }
