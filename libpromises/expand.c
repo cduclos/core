@@ -116,7 +116,7 @@ since these cannot be mapped into "this" without some magic.
    
 **********************************************************************/
 
-void ExpandPromise(AgentType agent, const char *scopeid, Promise *pp, void *fnptr,
+int ExpandPromise(AgentType agent, const char *scopeid, Promise *pp, void *fnptr,
                    const ReportContext *report_context)
 {
     Rlist *listvars = NULL, *scalarvars = NULL;
@@ -127,9 +127,9 @@ void ExpandPromise(AgentType agent, const char *scopeid, Promise *pp, void *fnpt
     CfDebug("* ExpandPromises (scope = %s )\n", scopeid);
     CfDebug("****************************************************\n\n");
 
-// Set a default for packages here...general defaults that need to come before
+    // Set a default for packages here...general defaults that need to come before
 
-//fix me wth a general function SetMissingDefaults
+    //fix me wth a general function SetMissingDefaults
 
     SetAnyMissingDefaults(pp);
 
@@ -160,6 +160,7 @@ void ExpandPromise(AgentType agent, const char *scopeid, Promise *pp, void *fnpt
     DeletePromise(pcopy);
     DeleteRlist(scalarvars);
     DeleteRlist(listvars);
+    return 0;
 }
 
 /*********************************************************************/
@@ -748,11 +749,11 @@ void ExpandPromiseAndDo(AgentType agent, const char *scopeid, Promise *pp, Rlist
         }
 
         if (strcmp(pp->agentsubtype, "meta") == 0)
-           {
-           char namespace[CF_BUFSIZE];
-           snprintf(namespace,CF_BUFSIZE,"%s_meta",pp->bundle);
-           ConvergeVarHashPromise(namespace, pp, true);
-           }
+        {
+            char namespace[CF_BUFSIZE];
+            snprintf(namespace,CF_BUFSIZE,"%s_meta",pp->bundle);
+            ConvergeVarHashPromise(namespace, pp, true);
+        }
         
         DeletePromise(pexp);
 
@@ -907,7 +908,7 @@ static void CopyLocalizedIteratorsToThisScope(const char *scope, const Rlist *li
 /* Tools                                                             */
 /*********************************************************************/
 
-int IsExpandable(const char *str)
+bool IsExpandable(const char *str)
 {
     const char *sp;
     char left = 'x', right = 'x';
@@ -969,95 +970,86 @@ int IsExpandable(const char *str)
 
 /*********************************************************************/
 
-int IsNakedVar(const char *str, char vtype)
+bool IsLegalVariableName(const char *str)
 {
-    int count = 0;
-
-    if (str == NULL || strlen(str) == 0)
-    {
+    if (!str || !strlen(str))
         return false;
-    }
-
-    char last = *(str + strlen(str) - 1);
-
-    if (strlen(str) < 3)
-    {
-        return false;
-    }
-
-    if (*str != vtype)
-    {
-        return false;
-    }
-
-    switch (*(str + 1))
-    {
-    case '(':
-        if (last != ')')
-        {
+    size_t length = strlen(str);
+    char *p = str;
+    /*
+     * First check if the variable has been stripped of decorations or not.
+     */
+    if ((str[0] == '@') || (str[0] == '$')) {
+        /*
+         * Check the beginning and end
+         * If the length is less than 4 then it is not a valid variable name
+         * since we need at least 4 characters: @ + ( + char + )
+         */
+        if (length < 4)
             return false;
-        }
-        break;
-
-    case '{':
-        if (last != '}')
-        {
+        if ((str[1] != '(') && (str[1] != '{'))
             return false;
-        }
-        break;
-
-    default:
-        return false;
-        break;
+        char last = *(str + strlen(str) - 1);
+        if ((last != ')')  && (last != '}'))
+            return false;
+        /*
+         * We remove three characters from the length, since they are decorations
+         * and not part of the name.
+         */
+        p = str + 2;
+        length -= 3;
     }
-
-    for (const char *sp = str; *sp != '\0'; sp++)
-    {
-        switch (*sp)
-        {
-        case '(':
-        case '{':
-        case '[':
-            count++;
-            break;
-        case ')':
-        case '}':
-        case ']':
-            count--;
-
-            /* The last character must be the end of the variable */
-
-            if (count == 0 && strlen(sp) > 1)
-            {
-                return false;
-            }
-            break;
-        }
+    /*
+     * We check the characters to see if they are valid or not.
+     * Valid characters are 'a-zA-Z0-9_'
+     */
+    size_t i = 0;
+    bool valid = false;
+    for (i = 0, valid = false; i < length; ++i, valid = false) {
+        if (p[i] == '_')
+            valid = true;
+        if (('a' <= p[i]) && (p[i] <= 'z'))
+            valid = true;
+        if (('A' <= p[i]) && (p[i] <= 'Z'))
+            valid = true;
+        if (('0' <= p[i]) && (p[i] <= '9'))
+            valid = true;
+        if (!valid)
+            return false;
     }
-
-    if (count != 0)
-    {
-        return false;
-    }
-
-    CfDebug("IsNakedVar(%s,%c)!!\n", str, vtype);
     return true;
 }
 
 /*********************************************************************/
 
-void GetNaked(char *s2, const char *s1)
+bool IsNakedVar(const char *str)
+{
+    if (!str || (strlen(str) < 4))
+        return false;
+    if ((str[0] != '@') && (str[0] != '$'))
+        return false;
+    if ((str[1] != '(') && (str[1] != '{'))
+        return false;
+    char last = *(str + strlen(str) - 1);
+    if ((last != ')') && (last != '}'))
+        return false;
+    return true;
+}
+
+/*********************************************************************/
+
+int GetNaked(char *s2, const char *s1)
 /* copy @(listname) -> listname */
 {
-    if (strlen(s1) < 4)
-    {
-        CfOut(cf_error, "", "Naked variable expected, but \"%s\" is malformed", s1);
-        strncpy(s2, s1, CF_MAXVARSIZE - 1);
-        return;
-    }
-
+    if (!IsLegalVariableName(s1))
+        return -1;
     memset(s2, 0, CF_MAXVARSIZE);
-    strncpy(s2, s1 + 2, strlen(s1) - 3);
+    if (!IsNakedVar(s1)) {
+        CfOut(cf_error, "", "Naked variable expected, but \"%s\" is malformed", s1);
+        strncpy(s2, s1, CF_MAXVARSIZE - 1);;
+    } else
+        strncpy(s2, s1 + 2, strlen(s1) - 3);
+    return 0;
 }
 
 /*********************************************************************/
