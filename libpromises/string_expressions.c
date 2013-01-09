@@ -24,10 +24,10 @@
 
 #include "cf3.defs.h"
 
-#include "bool.h"
+#include "../libutils/bool.h"
 #include "string_expressions.h"
 #include "logging.h"
-#include "misc_lib.h"
+#include "../libutils/misc_lib.h"
 
 #include <stdlib.h>
 #include <string.h>

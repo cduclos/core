@@ -31,8 +31,8 @@
 #include "unix.h"
 #include "transaction.h"
 #include "logging.h"
-#include "string_lib.h"
-#include "misc_lib.h"
+#include "../libutils/string_lib.h"
+#include "../libutils/misc_lib.h"
 
 #include <stdarg.h>
 

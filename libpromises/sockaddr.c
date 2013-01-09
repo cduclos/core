@@ -27,7 +27,7 @@
 
 #include "cfstream.h"
 #include "logging.h"
-#include "misc_lib.h"
+#include "../libutils/misc_lib.h"
 
 /*****************************************************************************/
 /* TOOLKIT                                                                   */

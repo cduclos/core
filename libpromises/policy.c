@@ -27,13 +27,13 @@
 
 #include "constraints.h"
 #include "syntax.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 #include "logging.h"
 #include "conversion.h"
 #include "reporting.h"
 #include "transaction.h"
 #include "cfstream.h"
-#include "misc_lib.h"
+#include "../libutils/misc_lib.h"
 
 #include <assert.h>
 

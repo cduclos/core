@@ -27,7 +27,7 @@
 
 #include "cf3.defs.h"
 
-#include "writer.h"
+#include "../libutils/writer.h"
 
 ReportContext *ReportContextNew(void);
 bool ReportContextAddWriter(ReportContext *context, ReportOutputType type, Writer *writer);

@@ -25,7 +25,7 @@
 #ifndef CFENGINE_CRYPTO_H
 #define CFENGINE_CRYPTO_H
 
-#include "platform.h"
+#include "../libutils/platform.h"
 
 void CryptoInitialize(void);
 

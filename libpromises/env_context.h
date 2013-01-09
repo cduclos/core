@@ -28,7 +28,7 @@
 #include "cf3.defs.h"
 
 #include "alphalist.h"
-#include "writer.h"
+#include "../libutils/writer.h"
 
 /**
   The global heap

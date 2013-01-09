@@ -29,7 +29,7 @@
 #include "dbm_priv.h"
 #include "dbm_lib.h"
 #include "dbm_migration.h"
-#include "atexit.h"
+#include "../libutils/atexit.h"
 #include "cfstream.h"
 #include "logging.h"
 

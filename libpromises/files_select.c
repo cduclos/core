@@ -31,7 +31,7 @@
 #include "promises.h"
 #include "matching.h"
 #include "cfstream.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 #include "pipes.h"
 #include "promises.h"
 #include "logging.h"

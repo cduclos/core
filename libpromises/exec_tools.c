@@ -30,7 +30,7 @@
 #include "cfstream.h"
 #include "pipes.h"
 #include "logging.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 #include "generic_agent.h" // CloseLog
 
 /********************************************************************/

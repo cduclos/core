@@ -26,7 +26,7 @@
 #define CFENGINE_POLICY_H
 
 #include "cf3.defs.h"
-#include "sequence.h"
+#include "../libutils/sequence.h"
 
 struct Policy_
 {

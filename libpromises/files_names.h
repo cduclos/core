@@ -25,7 +25,7 @@
 #ifndef CFENGINE_FILES_NAMES_H
 #define CFENGINE_FILES_NAMES_H
 
-#include "platform.h"
+#include "../libutils/platform.h"
 
 int IsNewerFileTree(char *dir, time_t reftime);
 int CompareCSVName(const char *s1, const char *s2);

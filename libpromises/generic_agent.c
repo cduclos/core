@@ -44,12 +44,12 @@
 #include "expand.h"
 #include "transaction.h"
 #include "scope.h"
-#include "atexit.h"
+#include "../libutils/atexit.h"
 #include "unix.h"
 #include "cfstream.h"
 #include "client_code.h"
 #include "logging.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 #include "exec_tools.h"
 
 #ifdef HAVE_NOVA

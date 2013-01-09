@@ -27,7 +27,7 @@
 
 #include "cf3.defs.h"
 
-#include "json.h"
+#include "../libutils/json.h"
 
 int IsBuiltinFnCall(Rval rval);
 FnCall *NewFnCall(const char *name, Rlist *args);

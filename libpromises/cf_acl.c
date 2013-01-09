@@ -29,7 +29,7 @@
 #include "promises.h"
 #include "cfstream.h"
 #include "logging.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 
 /*****************************************************************************/
 

@@ -25,9 +25,9 @@
 #ifndef CFENGINE_CF3_DEFS_H
 #define CFENGINE_CF3_DEFS_H
 
-#include "platform.h"
+#include "../libutils/platform.h"
 #include "rlist.h"
-#include "compiler.h"
+#include "../libutils/compiler.h"
 
 #ifdef HAVE_LIBXML2
 #include <libxml/parser.h>
@@ -2319,7 +2319,7 @@ extern double METER_REPAIRED[meter_endmark];
 
 #include "dbm_api.h"
 #include "prototypes3.h"
-#include "alloc.h"
+#include "../libutils/alloc.h"
 #include "cf3.extern.h"
 
 extern const BodySyntax CF_COMMON_BODIES[];

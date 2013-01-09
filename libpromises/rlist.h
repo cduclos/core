@@ -41,9 +41,9 @@ struct Rlist_
     Rlist *next;
 };
 
-#include "platform.h"
-#include "writer.h"
-#include "json.h"
+#include "../libutils/platform.h"
+#include "../libutils/writer.h"
+#include "../libutils/json.h"
 
 struct FnCall_;
 

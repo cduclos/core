@@ -31,7 +31,7 @@
 #include "matching.h"
 #include "cfstream.h"
 #include "verify_processes.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 #include "item_lib.h"
 #include "pipes.h"
 #include "files_interfaces.h"

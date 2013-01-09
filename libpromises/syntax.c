@@ -26,7 +26,7 @@
 #include "syntax.h"
 
 #include "constraints.h"
-#include "json.h"
+#include "../libutils/json.h"
 #include "files_names.h"
 #include "mod_files.h"
 #include "item_lib.h"
@@ -36,9 +36,9 @@
 #include "matching.h"
 #include "unix.h"
 #include "fncall.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 #include "logging.h"
-#include "misc_lib.h"
+#include "../libutils/misc_lib.h"
 
 #include <assert.h>
 

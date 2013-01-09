@@ -36,7 +36,7 @@
 #include "cfstream.h"
 #include "communication.h"
 #include "transaction.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 #include "logging.h"
 
 static void ShowState(char *type);

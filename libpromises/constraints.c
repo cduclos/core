@@ -34,7 +34,7 @@
 #include "reporting.h"
 #include "attributes.h"
 #include "cfstream.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 #include "transaction.h"
 #include "logging.h"
 

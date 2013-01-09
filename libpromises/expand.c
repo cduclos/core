@@ -360,12 +360,12 @@ Rlist *ExpandList(const char *scopeid, const Rlist *list, int expandnaked)
 
     for (rp = (Rlist *) list; rp != NULL; rp = rp->next)
     {
-        if (!expandnaked && (rp->type == CF_SCALAR) && IsNakedVar(rp->item, '@'))
+        if (!expandnaked && (rp->type == CF_SCALAR) && IsNakedVar(rp->item))
         {
             returnval.item = xstrdup(rp->item);
             returnval.rtype = CF_SCALAR;
         }
-        else if ((rp->type == CF_SCALAR) && IsNakedVar(rp->item, '@'))
+        else if ((rp->type == CF_SCALAR) && IsNakedVar(rp->item))
         {
             GetNaked(naked, rp->item);
 
@@ -775,7 +775,7 @@ Rval EvaluateFinalRval(const char *scopeid, Rval rval, int forcelist, const Prom
 
     CfDebug("EvaluateFinalRval -- type %c\n", rval.rtype);
 
-    if ((rval.rtype == CF_SCALAR) && IsNakedVar(rval.item, '@'))        /* Treat lists specially here */
+    if ((rval.rtype == CF_SCALAR) && IsNakedVar(rval.item))        /* Treat lists specially here */
     {
         GetNaked(naked, rval.item);
 
@@ -1325,7 +1325,7 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
         {
             for (rp = rval.item; rp != NULL; rp = rp->next)
             {
-                if (IsNakedVar(rp->item, '@'))
+                if (IsNakedVar(rp->item))
                 {
                     free(rp->item);
                     rp->item = xstrdup(CF_NULL_VALUE);

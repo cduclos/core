@@ -35,11 +35,11 @@
 #include "files_hashes.h"
 #include "item_lib.h"
 #include "expand.h"
-#include "atexit.h"
+#include "../libutils/atexit.h"
 #include "cfstream.h"
 #include "verify_processes.h"
 #include "logging.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 
 #define CFLOGSIZE 1048576       /* Size of lock-log before rotation */
 

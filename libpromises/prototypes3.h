@@ -25,7 +25,7 @@
 #ifndef CFENGINE_PROTOTYPES3_H
 #define CFENGINE_PROTOTYPES3_H
 
-#include "compiler.h"
+#include "../libutils/compiler.h"
 
 /* Versions */
 

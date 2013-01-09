@@ -25,7 +25,7 @@
 #include "addr_lib.h"
 
 #include "cfstream.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 
 #define CF_ADDRSIZE 128
 

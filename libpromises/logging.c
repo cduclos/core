@@ -28,10 +28,10 @@
 #include "env_context.h"
 #include "dbm_api.h"
 #include "files_names.h"
-#include "atexit.h"
+#include "../libutils/atexit.h"
 #include "unix.h"
 #include "cfstream.h"
-#include "string_lib.h"
+#include "../libutils/string_lib.h"
 #include "transaction.h"
 #include "constraints.h"
 

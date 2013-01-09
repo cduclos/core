@@ -26,7 +26,7 @@
 #define CFENGINE_SYNTAX_H
 
 #include "cf3.defs.h"
-#include "writer.h"
+#include "../libutils/writer.h"
 #include <stdio.h>
 
 int LvalWantsBody(char *stype, char *lval);
