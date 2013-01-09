@@ -251,7 +251,7 @@ Rval CopyRvalItem(Rval rval)
         {
             char naked[CF_BUFSIZE] = "";
 
-            if (IsNakedVar(rp->item, '@'))
+            if (IsNakedVar(rp->item))
             {
                 GetNaked(naked, rp->item);
 

@@ -147,7 +147,7 @@ void AugmentScope(char *scope, char *namespace, Rlist *lvals, Rlist *rvals)
         // CheckBundleParameters() already checked that there is no namespace collision
         // By this stage all functions should have been expanded, so we only have scalars left
 
-        if (IsNakedVar(rpr->item, '@'))
+        if (IsNakedVar(rpr->item))
         {
             enum cfdatatype vtype;
             char qnaked[CF_MAXVARSIZE];

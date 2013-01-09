@@ -663,7 +663,7 @@ static int CheckParseString(const char *lval, const char *s, const char *range)
         return true;
     }
 
-    if (IsNakedVar(s, '@') || IsNakedVar(s, '$'))
+    if (IsNakedVar(s))
     {
         CfDebug("Validation: Unable to verify variable expansion of %s at this stage\n", s);
         return false;
@@ -1045,7 +1045,7 @@ static void CheckParseOpts(const char *lval, const char *s, const char *range)
         return;
     }
 
-    if (IsNakedVar(s, '@') || IsNakedVar(s, '$'))
+    if (IsNakedVar(s))
     {
         CfDebug("Validation: Unable to verify variable expansion of %s at this stage\n", s);
         return;

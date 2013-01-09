@@ -55,6 +55,7 @@ check_PROGRAMS = \
 	scope_test \
 	conversion_test \
 	files_interfaces_test \
+    expand_test \
 	timeout_test \
 	connection_management_test
 
@@ -72,6 +73,9 @@ csv_writer_test_SOURCES = csv_writer_test.c ../../libutils/csv_writer.c
 csv_writer_test_LDADD = libtest.la libstr.la
 
 conversion_test_SOURCES = conversion_test.c ../../libpromises/conversion.c
+
+expand_test_SOURCES = expand_test.c ../../libpromises/expand.c
+expand_test_LDADD = libtest.la
 
 rlist_test_SOURCES = rlist_test.c \
 	../../libpromises/rlist.c
