@@ -1198,19 +1198,24 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
     enum cfdatatype existing_var = GetVariable(scope, pp->promiser, &retval);
     CarlosDebug("GetVariable");
     char qualified_scope[CF_MAXVARSIZE];
-
+    CarlosDebug(pp->namespace);
+    CarlosDebug(scope);
     if (strcmp(pp->namespace, "default") == 0)
        {
+        CarlosDebug("strcmp(pp->namespace, default)");
        strcpy(qualified_scope, scope);
        }
     else
        {
+        CarlosDebug("pp->namespace != default");
        if (strchr(scope, ':') == NULL)
           {
+           CarlosDebug("scope does not contain :");
           snprintf(qualified_scope, CF_MAXVARSIZE, "%s:%s", pp->namespace, scope);
           }
        else
           {
+           CarlosDebug("scope contains :")
           strcpy(qualified_scope, scope);
           }
        }
