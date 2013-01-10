@@ -1145,33 +1145,20 @@ bool IsDefinedClass(const char *class, const char *namespace)
     ParseResult res;
 
     if (!class)
-    {
         return true;
-    }
 
     res = ParseExpression(class, 0, strlen(class));
-
-    if (!res.result)
-    {
+    if (!res.result) {
         char *errexpr = HighlightExpressionError(class, res.position);
-
         CfOut(cf_error, "", "Unable to parse class expression: %s", errexpr);
         free(errexpr);
         return false;
     }
-    else
-    {
-        ExpressionValue r = EvalExpression(res.result,
-                                           &EvalTokenAsClass, &EvalVarRef,
-                                           (void *)namespace);
-
-        FreeExpression(res.result);
-
-        CfDebug("Evaluate(%s) -> %d\n", class, r);
-
-        /* r is EvalResult which could be ERROR */
-        return r == true;
-    }
+    ExpressionValue r = EvalExpression(res.result, &EvalTokenAsClass, &EvalVarRef, (void *)namespace);
+    FreeExpression(res.result);
+    CfDebug("Evaluate(%s) -> %d\n", class, r);
+    /* r is EvalResult which could be ERROR */
+    return (r == true);
 }
 
 /**********************************************************************/

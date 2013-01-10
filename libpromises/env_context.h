@@ -57,6 +57,18 @@ extern Item *ABORTBUNDLEHEAP;
 
 /* - Parsing/evaluating expressions - */
 void ValidateClassSyntax(const char *str);
+
+/**
+  @brief Apparently finds if a class is defined or not.
+
+  We have to make a decision if this function accepts NULL pointers or not.
+  We cannot have ambivalence regarding this, we need to set a boundary and make
+  sure that some callers take responsability for making sure they never call
+  other functions with NULL pointers.
+  @param [in] class
+  @param [in] namespace
+  @return True if defined, false if not.
+  */
 bool IsDefinedClass(const char *class, const char *ns);
 bool IsExcluded(const char *exception, const char *ns);
 
