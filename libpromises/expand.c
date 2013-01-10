@@ -1081,44 +1081,28 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
     Rval rval = { NULL, 'x' };  /* FIXME: why this needs to be initialized? */
 
     if (pp->done)
-    {
         return;
-    }
 
     if (IsExcluded(pp->classes, pp->namespace))
-    {
         return;
-    }
 
-    for (cp = pp->conlist; cp != NULL; cp = cp->next)
-    {
+    for (cp = pp->conlist; cp != NULL; cp = cp->next) {
         if (strcmp(cp->lval, "comment") == 0)
-        {
             continue;
-        }
 
         if (cp->rval.item == NULL)
-        {
             continue;
-        }
 
-        if (strcmp(cp->lval, "ifvarclass") == 0)
-        {
+        if (strcmp(cp->lval, "ifvarclass") == 0) {
             Rval res;
-
-            switch (cp->rval.rtype)
-            {
+            switch (cp->rval.rtype) {
             case CF_SCALAR:
 
                 if (IsExcluded(cp->rval.item, pp->namespace))
-                {
                     return;
-                }
-
                 break;
 
             case CF_FNCALL:
-            {
                 bool excluded = false;
 
                 /* eval it: e.g. ifvarclass => not("a_class") */
@@ -1126,21 +1110,15 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
                 res = EvaluateFunctionCall(cp->rval.item, NULL).rval;
 
                 /* Don't continue unless function was evaluated properly */
-                if (res.rtype != CF_SCALAR)
-                {
+                if (res.rtype != CF_SCALAR) {
                     DeleteRvalItem(res);
                     return;
                 }
 
                 excluded = IsExcluded(res.item, pp->namespace);
-
                 DeleteRvalItem(res);
-
                 if (excluded)
-                {
                     return;
-                }
-            }
                 break;
 
             default:
@@ -1151,24 +1129,15 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
             continue;
         }
 
-        if (strcmp(cp->lval, "policy") == 0)
-        {
-            if (strcmp(cp->rval.item, "ifdefined") == 0)
-            {
+        if (strcmp(cp->lval, "policy") == 0) {
+            if (strcmp(cp->rval.item, "ifdefined") == 0) {
                 drop_undefined = true;
                 ok_redefine = false;
-            }
-            else if (strcmp(cp->rval.item, "constant") == 0)
-            {
+            } else if (strcmp(cp->rval.item, "constant") == 0)
                 ok_redefine = false;
-            }
             else
-            {
                 ok_redefine = true;
-            }
-        }
-        else if (IsDataType(cp->lval))
-        {
+        } else if (IsDataType(cp->lval)) {
             i++;
             rval.item = cp->rval.item;
             cp_save = cp;
@@ -1177,15 +1146,13 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
 
     cp = cp_save;
 
-    if (cp == NULL)
-    {
+    if (cp == NULL) {
         CfOut(cf_inform, "", "Warning: Variable body for \"%s\" seems incomplete", pp->promiser);
         PromiseRef(cf_inform, pp);
         return;
     }
 
-    if (i > 2)
-    {
+    if (i > 2) {
         CfOut(cf_error, "", "Variable \"%s\" breaks its own promise with multiple values (code %d)", pp->promiser, i);
         PromiseRef(cf_error, pp);
         return;
@@ -1198,156 +1165,111 @@ void ConvergeVarHashPromise(char *scope, const Promise *pp, int allow_redefine)
     enum cfdatatype existing_var = GetVariable(scope, pp->promiser, &retval);
 
     char *qualified_scope = NULL;
-    if (strcmp(pp->namespace, "default") == 0)
-    {
+    if (strcmp(pp->namespace, "default") == 0) {
         qualified_scope = (char *)xmalloc(strlen(scope) + 1);
         strcpy(qualified_scope, scope);
-    }
-    else
-    {
-        if (strchr(scope, ':') == NULL)
-        {
+    } else {
+        if (strchr(scope, ':') == NULL) {
             qualified_scope = (char *)xmalloc(strlen(pp->namespace) + strlen(scope) + 1);
             snprintf(qualified_scope, CF_MAXVARSIZE, "%s:%s", pp->namespace, scope);
-        }
-        else
-        {
+        } else {
             qualified_scope = (char *)xmalloc(strlen(scope) + 1);
             strcpy(qualified_scope, scope);
         }
     }
-    if (rval.item != NULL)
-    {
+    if (rval.item != NULL) {
         FnCall *fp = (FnCall *) rval.item;
 
-        if (cp->rval.rtype == CF_FNCALL)
-        {
-            if (existing_var != cf_notype)
-            {
+        if (cp->rval.rtype == CF_FNCALL) {
+            if (existing_var != cf_notype) {
                 // Already did this
                 return;
             }
 
             FnCallResult res = EvaluateFunctionCall(fp, pp);
 
-            if (res.status == FNCALL_FAILURE)
-            {
+            if (res.status == FNCALL_FAILURE) {
                 /* We do not assign variables to failed fn calls */
                 DeleteRvalItem(res.rval);
                 return;
-            }
-            else
-            {
+            } else
                 rval = res.rval;
-            }
-        }
-        else
-        {
+        } else {
             char conv[CF_MAXVARSIZE];
-
-            if (strcmp(cp->lval, "int") == 0)
-            {
+            if (strcmp(cp->lval, "int") == 0) {
                 snprintf(conv, CF_MAXVARSIZE, "%ld", Str2Int(cp->rval.item));
                 rval = CopyRvalItem((Rval) {conv, cp->rval.rtype});
+            } else if (strcmp(cp->lval, "real") == 0) {
+                snprintf(conv, CF_MAXVARSIZE, "%lf", Str2Double(cp->rval.item));
+                rval = CopyRvalItem((Rval) {conv, cp->rval.rtype});
+            } else
+                rval = CopyRvalItem(cp->rval);
         }
-        else if (strcmp(cp->lval, "real") == 0)
-        {
-            snprintf(conv, CF_MAXVARSIZE, "%lf", Str2Double(cp->rval.item));
-            rval = CopyRvalItem((Rval) {conv, cp->rval.rtype});
-    }
-    else
-    {
-        rval = CopyRvalItem(cp->rval);
-    }
-}
-if (Epimenides(pp->promiser, rval, 0))
-{
-    CfOut(cf_error, "", "Variable \"%s\" contains itself indirectly - an unkeepable promise", pp->promiser);
-    exit(1);
-}
-else
-{
-/* See if the variable needs recursively expanding again */
-
-Rval returnval = EvaluateFinalRval(qualified_scope, rval, true, pp);
-
-DeleteRvalItem(rval);
-
-// freed before function exit
-rval = returnval;
-}
-if (existing_var != cf_notype)
-{
-    if (ok_redefine)    /* only on second iteration, else we ignore broken promises */
-    {
-        DeleteVariable(qualified_scope, pp->promiser);
-    }
-    else if ((THIS_AGENT_TYPE == AGENT_TYPE_COMMON) && (CompareRval(retval, rval) == false))
-    {
-        switch (rval.rtype)
-        {
-        char valbuf[CF_BUFSIZE];
-
-        case CF_SCALAR:
-            CfOut(cf_verbose, "", " !! Redefinition of a constant scalar \"%s\" (was %s now %s)",
-                  pp->promiser, ScalarRvalValue(retval), ScalarRvalValue(rval));
+        if (Epimenides(pp->promiser, rval, 0)) {
+            CfOut(cf_error, "", "Variable \"%s\" contains itself indirectly - an unkeepable promise", pp->promiser);
+            exit(1);
+        } else {
+            /* See if the variable needs recursively expanding again */
+            Rval returnval = EvaluateFinalRval(qualified_scope, rval, true, pp);
+            DeleteRvalItem(rval);
+            // freed before function exit
+            rval = returnval;
+        }
+        if (existing_var != cf_notype) {
+            /* only on second iteration, else we ignore broken promises */
+            if (ok_redefine)
+                DeleteVariable(qualified_scope, pp->promiser);
+            else if ((THIS_AGENT_TYPE == AGENT_TYPE_COMMON) && (CompareRval(retval, rval) == false)) {
+                switch (rval.rtype) {
+                char valbuf[CF_BUFSIZE];
+                case CF_SCALAR:
+                    CfOut(cf_verbose, "", " !! Redefinition of a constant scalar \"%s\" (was %s now %s)",
+                          pp->promiser, ScalarRvalValue(retval), ScalarRvalValue(rval));
+                    PromiseRef(cf_verbose, pp);
+                    break;
+                case CF_LIST:
+                    CfOut(cf_verbose, "", " !! Redefinition of a constant list \"%s\".", pp->promiser);
+                    PrintRlist(valbuf, CF_BUFSIZE, retval.item);
+                    CfOut(cf_verbose, "", "Old value: %s", valbuf);
+                    PrintRlist(valbuf, CF_BUFSIZE, rval.item);
+                    CfOut(cf_verbose, "", " New value: %s", valbuf);
+                    PromiseRef(cf_verbose, pp);
+                    break;
+                }
+            }
+        }
+        if (IsCf3VarString(pp->promiser)) {
+            // Unexpanded variables, we don't do anything with
+            DeleteRvalItem(rval);
+            return;
+        }
+        if (!FullTextMatch("[a-zA-Z0-9_\200-\377.]+(\\[.+\\])*", pp->promiser)) {
+            CfOut(cf_error, "", " !! Variable identifier contains illegal characters");
+            PromiseRef(cf_error, pp);
+            DeleteRvalItem(rval);
+            return;
+        }
+        if (drop_undefined && rval.rtype == CF_LIST) {
+            for (rp = rval.item; rp != NULL; rp = rp->next) {
+                if (IsNakedVar(rp->item)) {
+                    free(rp->item);
+                    rp->item = xstrdup(CF_NULL_VALUE);
+                }
+            }
+        }
+        if (!AddVariableHash(qualified_scope, pp->promiser, rval, Typename2Datatype(cp->lval),
+                             cp->audit->filename, cp->offset.line)) {
+            CfOut(cf_verbose, "", "Unable to converge %s.%s value (possibly empty or infinite regression)\n", qualified_scope, pp->promiser);
             PromiseRef(cf_verbose, pp);
-            break;
-        case CF_LIST:
-            CfOut(cf_verbose, "", " !! Redefinition of a constant list \"%s\".", pp->promiser);
-            PrintRlist(valbuf, CF_BUFSIZE, retval.item);
-            CfOut(cf_verbose, "", "Old value: %s", valbuf);
-            PrintRlist(valbuf, CF_BUFSIZE, rval.item);
-            CfOut(cf_verbose, "", " New value: %s", valbuf);
-            PromiseRef(cf_verbose, pp);
-            break;
-        }
+            cfPS(cf_noreport, CF_FAIL, "", pp, a, " !! Couldn't add variable %s", pp->promiser);
+        } else
+            cfPS(cf_noreport, CF_CHG, "", pp, a, " -> Added variable %s", pp->promiser);
+    } else {
+        CfOut(cf_error, "", " !! Variable %s has no promised value\n", pp->promiser);
+        CfOut(cf_error, "", " !! Rule from %s at/before line %zu\n", cp->audit->filename, cp->offset.line);
+        cfPS(cf_noreport, CF_FAIL, "", pp, a, " !! Couldn't add variable %s", pp->promiser);
     }
-}
-if (IsCf3VarString(pp->promiser))
-{
-    // Unexpanded variables, we don't do anything with
     DeleteRvalItem(rval);
-    return;
-}
-if (!FullTextMatch("[a-zA-Z0-9_\200-\377.]+(\\[.+\\])*", pp->promiser))
-{
-    CfOut(cf_error, "", " !! Variable identifier contains illegal characters");
-    PromiseRef(cf_error, pp);
-    DeleteRvalItem(rval);
-    return;
-}
-if (drop_undefined && rval.rtype == CF_LIST)
-{
-    for (rp = rval.item; rp != NULL; rp = rp->next)
-    {
-        if (IsNakedVar(rp->item))
-        {
-            free(rp->item);
-            rp->item = xstrdup(CF_NULL_VALUE);
-        }
-    }
-}
-if (!AddVariableHash(qualified_scope, pp->promiser, rval, Typename2Datatype(cp->lval),
-                     cp->audit->filename, cp->offset.line))
-{
-    CfOut(cf_verbose, "", "Unable to converge %s.%s value (possibly empty or infinite regression)\n", qualified_scope, pp->promiser);
-    PromiseRef(cf_verbose, pp);
-    cfPS(cf_noreport, CF_FAIL, "", pp, a, " !! Couldn't add variable %s", pp->promiser);
-}
-else
-{
-cfPS(cf_noreport, CF_CHG, "", pp, a, " -> Added variable %s", pp->promiser);
-}
-}
-else
-{
-CfOut(cf_error, "", " !! Variable %s has no promised value\n", pp->promiser);
-CfOut(cf_error, "", " !! Rule from %s at/before line %zu\n", cp->audit->filename, cp->offset.line);
-cfPS(cf_noreport, CF_FAIL, "", pp, a, " !! Couldn't add variable %s", pp->promiser);
-}
-
-DeleteRvalItem(rval);
 }
 
 /*********************************************************************/
