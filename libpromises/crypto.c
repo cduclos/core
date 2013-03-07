@@ -34,8 +34,10 @@
 #include "transaction.h"
 #include "logging.h"
 
-static void MD5Random(unsigned char digest[EVP_MAX_MD_SIZE + 1]);
 static void RandomSeed(void);
+
+static char *CFPUBKEYFILE;
+static char *CFPRIVKEYFILE;
 
 /**********************************************************************/
 
@@ -63,7 +65,6 @@ void CryptoInitialize()
 
 static void RandomSeed(void)
 {
-    static unsigned char digest[EVP_MAX_MD_SIZE + 1];
     char vbuff[CF_BUFSIZE];
 
 /* Use the system database as the entropy source for random numbers */
@@ -71,18 +72,20 @@ static void RandomSeed(void)
 
     snprintf(vbuff, CF_BUFSIZE, "%s%crandseed", CFWORKDIR, FILE_SEPARATOR);
 
-    CfOut(cf_verbose, "", "Looking for a source of entropy in %s\n", vbuff);
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", "Looking for a source of entropy in %s\n", vbuff);
 
     if (!RAND_load_file(vbuff, -1))
     {
-        CfOut(cf_verbose, "", "Could not read sufficient randomness from %s\n", vbuff);
+        CfOut(OUTPUT_LEVEL_VERBOSE, "", "Could not read sufficient randomness from %s\n", vbuff);
     }
 
-    while (!RAND_status())
-    {
-        MD5Random(digest);
-        RAND_seed((void *) digest, 16);
-    }
+    /* Submit some random data to random pool */
+    RAND_seed(&CFSTARTTIME, sizeof(time_t));
+    RAND_seed(VFQNAME, strlen(VFQNAME));
+    time_t now = time(NULL);
+    RAND_seed(&now, sizeof(time_t));
+    char uninitbuffer[100];
+    RAND_seed(uninitbuffer, sizeof(uninitbuffer));
 }
 
 /*********************************************************************/
@@ -96,16 +99,16 @@ void LoadSecretKeys()
     unsigned long err;
     struct stat sb;
 
-    if ((fp = fopen(CFPRIVKEYFILE, "r")) == NULL)
+    if ((fp = fopen(PrivateKeyFile(), "r")) == NULL)
     {
-        CfOut(cf_inform, "fopen", "Couldn't find a private key (%s) - use cf-key to get one", CFPRIVKEYFILE);
+        CfOut(OUTPUT_LEVEL_INFORM, "fopen", "Couldn't find a private key (%s) - use cf-key to get one", PrivateKeyFile());
         return;
     }
 
     if ((PRIVKEY = PEM_read_RSAPrivateKey(fp, (RSA **) NULL, NULL, passphrase)) == NULL)
     {
         err = ERR_get_error();
-        CfOut(cf_error, "PEM_read", "Error reading Private Key = %s\n", ERR_reason_error_string(err));
+        CfOut(OUTPUT_LEVEL_ERROR, "PEM_read", "Error reading Private Key = %s\n", ERR_reason_error_string(err));
         PRIVKEY = NULL;
         fclose(fp);
         return;
@@ -113,24 +116,24 @@ void LoadSecretKeys()
 
     fclose(fp);
 
-    CfOut(cf_verbose, "", " -> Loaded private key %s\n", CFPRIVKEYFILE);
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> Loaded private key %s\n", PrivateKeyFile());
 
-    if ((fp = fopen(CFPUBKEYFILE, "r")) == NULL)
+    if ((fp = fopen(PublicKeyFile(), "r")) == NULL)
     {
-        CfOut(cf_error, "fopen", "Couldn't find a public key (%s) - use cf-key to get one", CFPUBKEYFILE);
+        CfOut(OUTPUT_LEVEL_ERROR, "fopen", "Couldn't find a public key (%s) - use cf-key to get one", PublicKeyFile());
         return;
     }
 
     if ((PUBKEY = PEM_read_RSAPublicKey(fp, NULL, NULL, passphrase)) == NULL)
     {
         err = ERR_get_error();
-        CfOut(cf_error, "PEM_read", "Error reading Private Key = %s\n", ERR_reason_error_string(err));
+        CfOut(OUTPUT_LEVEL_ERROR, "PEM_read", "Error reading Private Key = %s\n", ERR_reason_error_string(err));
         PUBKEY = NULL;
         fclose(fp);
         return;
     }
 
-    CfOut(cf_verbose, "", " -> Loaded public key %s\n", CFPUBKEYFILE);
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> Loaded public key %s\n", PublicKeyFile());
     fclose(fp);
 
     if ((BN_num_bits(PUBKEY->e) < 2) || (!BN_is_odd(PUBKEY->e)))
@@ -154,8 +157,10 @@ void LoadSecretKeys()
 
 /* Check that we have our own SHA key form of the key in the IP on the hub */
 
+    char buffer[EVP_MAX_MD_SIZE * 4];
+
     HashPubKey(PUBKEY, digest, CF_DEFAULT_DIGEST);
-    snprintf(name, CF_MAXVARSIZE, "%s/ppkeys/%s-%s.pub", CFWORKDIR, "root", HashPrint(CF_DEFAULT_DIGEST, digest));
+    snprintf(name, CF_MAXVARSIZE, "%s/ppkeys/%s-%s.pub", CFWORKDIR, "root", HashPrintSafe(CF_DEFAULT_DIGEST, digest, buffer));
     MapName(name);
 
     snprintf(source, CF_MAXVARSIZE, "%s/ppkeys/localhost.pub", CFWORKDIR);
@@ -171,11 +176,11 @@ void LoadSecretKeys()
     if ((stat(name, &sb) == -1) && (stat(guard, &sb) != -1))
         // copy localhost.pub to root-HASH.pub on policy server
     {
-        LastSaw(POLICY_SERVER, digest, cf_connect);
+        LastSaw(POLICY_SERVER, digest, LAST_SEEN_ROLE_CONNECT);
 
         if (!LinkOrCopy(source, name, false))
         {
-            CfOut(cf_error, "", " -> Unable to clone server's key file as %s\n", name);
+            CfOut(OUTPUT_LEVEL_ERROR, "", " -> Unable to clone server's key file as %s\n", name);
         }
     }
 
@@ -212,11 +217,11 @@ RSA *HavePublicKey(char *username, char *ipaddress, char *digest)
 
     if (cfstat(newname, &statbuf) == -1)
     {
-        CfOut(cf_verbose, "", " -> Did not find new key format %s", newname);
+        CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> Did not find new key format %s", newname);
         snprintf(oldname, CF_BUFSIZE, "%s/ppkeys/%s-%s.pub", CFWORKDIR, username, ipaddress);
         MapName(oldname);
 
-        CfOut(cf_verbose, "", " -> Trying old style %s", oldname);
+        CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> Trying old style %s", oldname);
 
         if (cfstat(oldname, &statbuf) == -1)
         {
@@ -226,18 +231,18 @@ RSA *HavePublicKey(char *username, char *ipaddress, char *digest)
 
         if (strlen(digest) > 0)
         {
-            CfOut(cf_inform, "", " -> Renaming old key from %s to %s", oldname, newname);
+            CfOut(OUTPUT_LEVEL_INFORM, "", " -> Renaming old key from %s to %s", oldname, newname);
 
             if (rename(oldname, newname) != 0)
             {
-                CfOut(cf_error, "rename", "!! Could not rename from old key format (%s) to new (%s)", oldname, newname);
+                CfOut(OUTPUT_LEVEL_ERROR, "rename", "!! Could not rename from old key format (%s) to new (%s)", oldname, newname);
             }
         }
         else                    // we don't know the digest (e.g. because we are a client and
             // have no lastseen-map and/or root-SHA...pub of the server's key
             // yet) Just using old file format (root-IP.pub) without renaming for now.
         {
-            CfOut(cf_verbose, "", " -> Could not map key file to new format - we have no digest yet (using %s)",
+            CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> Could not map key file to new format - we have no digest yet (using %s)",
                   oldname);
             snprintf(newname, sizeof(newname), "%s", oldname);
         }
@@ -245,14 +250,14 @@ RSA *HavePublicKey(char *username, char *ipaddress, char *digest)
 
     if ((fp = fopen(newname, "r")) == NULL)
     {
-        CfOut(cf_error, "fopen", "Couldn't find a public key (%s)", newname);
+        CfOut(OUTPUT_LEVEL_ERROR, "fopen", "Couldn't find a public key (%s)", newname);
         return NULL;
     }
 
     if ((newkey = PEM_read_RSAPublicKey(fp, NULL, NULL, passphrase)) == NULL)
     {
         err = ERR_get_error();
-        CfOut(cf_error, "PEM_read", "Error reading Private Key = %s\n", ERR_reason_error_string(err));
+        CfOut(OUTPUT_LEVEL_ERROR, "PEM_read", "Error reading Private Key = %s\n", ERR_reason_error_string(err));
         fclose(fp);
         return NULL;
     }
@@ -288,11 +293,11 @@ void SavePublicKey(char *user, char *ipaddress, char *digest, RSA *key)
         return;
     }
 
-    CfOut(cf_verbose, "", "Saving public key %s\n", filename);
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", "Saving public key %s\n", filename);
 
     if ((fp = fopen(filename, "w")) == NULL)
     {
-        CfOut(cf_error, "fopen", "Unable to write a public key %s", filename);
+        CfOut(OUTPUT_LEVEL_ERROR, "fopen", "Unable to write a public key %s", filename);
         return;
     }
 
@@ -301,69 +306,12 @@ void SavePublicKey(char *user, char *ipaddress, char *digest, RSA *key)
     if (!PEM_write_RSAPublicKey(fp, key))
     {
         err = ERR_get_error();
-        CfOut(cf_error, "PEM_write", "Error saving public key %s = %s\n", filename, ERR_reason_error_string(err));
+        CfOut(OUTPUT_LEVEL_ERROR, "PEM_write", "Error saving public key %s = %s\n", filename, ERR_reason_error_string(err));
     }
 
     ThreadUnlock(cft_system);
     fclose(fp);
 }
-
-/*********************************************************************/
-
-static void MD5Random(unsigned char digest[EVP_MAX_MD_SIZE + 1])
-   /* Make a decent random number by crunching some system states & garbage through
-      MD5. We can use this as a seed for pseudo random generator */
-{
-    unsigned char buffer[CF_BUFSIZE];
-    char pscomm[CF_BUFSIZE];
-    char uninitbuffer[100];
-    int md_len;
-    const EVP_MD *md;
-    EVP_MD_CTX context;
-    FILE *pp;
-
-    CfOut(cf_verbose, "", "Looking for a random number seed...\n");
-
-#ifdef HAVE_NOVA
-    md = EVP_get_digestbyname("sha256");
-#else
-    md = EVP_get_digestbyname("md5");
-#endif
-
-    EVP_DigestInit(&context, md);
-
-    CfOut(cf_verbose, "", "...\n");
-
-    snprintf(buffer, CF_BUFSIZE, "%d%d%25s", (int) CFSTARTTIME, (int) *digest, VFQNAME);
-
-    EVP_DigestUpdate(&context, buffer, CF_BUFSIZE);
-
-    snprintf(pscomm, CF_BUFSIZE, "%s %s", VPSCOMM[VSYSTEMHARDCLASS], VPSOPTS[VSYSTEMHARDCLASS]);
-
-    if ((pp = cf_popen(pscomm, "r")) != NULL)
-    {
-        CfOut(cf_error, "cf_popen", "Couldn't open the process list with command %s\n", pscomm);
-
-        while (!feof(pp))
-        {
-            if (CfReadLine(buffer, CF_BUFSIZE, pp) == -1)
-            {
-                FatalError("Error in CfReadLine");
-            }
-            EVP_DigestUpdate(&context, buffer, CF_BUFSIZE);
-        }
-    }
-
-    uninitbuffer[99] = '\0';
-    snprintf(buffer, CF_BUFSIZE - 1, "%ld %s", time(NULL), uninitbuffer);
-    EVP_DigestUpdate(&context, buffer, CF_BUFSIZE);
-
-    cf_pclose(pp);
-
-    EVP_DigestFinal(&context, digest, &md_len);
-}
-
-/*********************************************************************/
 
 int EncryptString(char type, char *in, char *out, unsigned char *key, int plainlen)
 {
@@ -406,7 +354,7 @@ int DecryptString(char type, char *in, char *out, unsigned char *key, int cipher
 
     if (!EVP_DecryptUpdate(&ctx, out, &plainlen, in, cipherlen))
     {
-        CfOut(cf_error, "", "!! Decrypt FAILED");
+        CfOut(OUTPUT_LEVEL_ERROR, "", "!! Decrypt FAILED");
         EVP_CIPHER_CTX_cleanup(&ctx);
         return -1;
     }
@@ -415,7 +363,7 @@ int DecryptString(char type, char *in, char *out, unsigned char *key, int cipher
     {
         unsigned long err = ERR_get_error();
 
-        CfOut(cf_error, "", "decryption FAILED at final of %d: %s\n", cipherlen, ERR_error_string(err, NULL));
+        CfOut(OUTPUT_LEVEL_ERROR, "", "decryption FAILED at final of %d: %s\n", cipherlen, ERR_error_string(err, NULL));
         EVP_CIPHER_CTX_cleanup(&ctx);
         return -1;
     }
@@ -449,5 +397,25 @@ void DebugBinOut(char *buffer, int len, char *comment)
         strcat(buf, hexStr);
     }
 
-    CfOut(cf_verbose, "", "BinaryBuffer(%d bytes => %s) -> [%s]", len, comment, buf);
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", "BinaryBuffer(%d bytes => %s) -> [%s]", len, comment, buf);
+}
+
+const char *PublicKeyFile(void)
+{
+    if (!CFPUBKEYFILE)
+    {
+        xasprintf(&CFPUBKEYFILE,
+                  "%s" FILE_SEPARATOR_STR "ppkeys" FILE_SEPARATOR_STR "localhost.pub", CFWORKDIR);
+    }
+    return CFPUBKEYFILE;
+}
+
+const char *PrivateKeyFile(void)
+{
+    if (!CFPRIVKEYFILE)
+    {
+        xasprintf(&CFPRIVKEYFILE,
+                  "%s" FILE_SEPARATOR_STR "ppkeys" FILE_SEPARATOR_STR "localhost.priv", CFWORKDIR);
+    }
+    return CFPRIVKEYFILE;
 }

@@ -27,18 +27,26 @@
 
 #include "env_context.h"
 #include "env_monitor.h"
-#include "constraints.h"
 #include "conversion.h"
 #include "reporting.h"
 #include "vars.h"
 #include "cfstream.h"
 #include "signals.h"
+#include "scope.h"
 
-/*****************************************************************************/
 
-static void ThisAgentInit(void);
-static GenericAgentConfig *CheckOpts(int argc, char **argv);
-static void KeepPromises(Policy *policy, const ReportContext *report_context);
+typedef enum
+{
+    MONITOR_CONTROL_FORGET_RATE,
+    MONITOR_CONTROL_MONITOR_FACILITY,
+    MONITOR_CONTROL_HISTOGRAMS,
+    MONITOR_CONTROL_TCP_DUMP,
+    MONITOR_CONTROL_NONE
+} MonitorControl;
+
+static void ThisAgentInit(EvalContext *ctx);
+static GenericAgentConfig *CheckOpts(EvalContext *ctx, int argc, char **argv);
+static void KeepPromises(EvalContext *ctx, Policy *policy, const ReportContext *report_context);
 
 /*****************************************************************************/
 /* Globals                                                                   */
@@ -96,23 +104,31 @@ static const char *HINTS[14] =
 
 int main(int argc, char *argv[])
 {
-    GenericAgentConfig *config = CheckOpts(argc, argv);
+    EvalContext *ctx = EvalContextNew();
 
-    ReportContext *report_context = OpenReports("monitor");
-    Policy *policy = GenericInitialize("monitor", config, report_context, false);
-    ThisAgentInit();
-    KeepPromises(policy, report_context);
+    GenericAgentConfig *config = CheckOpts(ctx, argc, argv);
+    GenericAgentConfigApply(ctx, config);
 
-    MonitorStartServer(policy, report_context);
+    ReportContext *report_context = OpenReports(config->agent_type);
+    GenericAgentDiscoverContext(ctx, config, report_context);
+    Policy *policy = GenericAgentLoadPolicy(ctx, config->agent_type, config, report_context);
+
+    CheckLicenses(ctx);
+
+    ThisAgentInit(ctx);
+    KeepPromises(ctx, policy, report_context);
+
+    MonitorStartServer(ctx, policy, report_context);
 
     ReportContextDestroy(report_context);
     GenericAgentConfigDestroy(config);
+    EvalContextDestroy(ctx);
     return 0;
 }
 
 /*******************************************************************/
 
-static GenericAgentConfig *CheckOpts(int argc, char **argv)
+static GenericAgentConfig *CheckOpts(EvalContext *ctx, int argc, char **argv)
 {
     extern char *optarg;
     int optindex = 0;
@@ -129,7 +145,7 @@ static GenericAgentConfig *CheckOpts(int argc, char **argv)
             break;
 
         case 'd':
-            HardClass("opt_debug");
+            EvalContextHeapAddHard(ctx, "opt_debug");
             DEBUG = true;
             NO_FORK = true;
             break;
@@ -171,7 +187,7 @@ static GenericAgentConfig *CheckOpts(int argc, char **argv)
             exit(0);
 
         case 'x':
-            CfOut(cf_error, "", "Self-diagnostic functionality is retired.");
+            CfOut(OUTPUT_LEVEL_ERROR, "", "Self-diagnostic functionality is retired.");
             exit(0);
 
         default:
@@ -187,7 +203,7 @@ static GenericAgentConfig *CheckOpts(int argc, char **argv)
 
 /*****************************************************************************/
 
-static void KeepPromises(Policy *policy, const ReportContext *report_context)
+static void KeepPromises(EvalContext *ctx, Policy *policy, const ReportContext *report_context)
 {
     Rval retval;
 
@@ -198,28 +214,28 @@ static void KeepPromises(Policy *policy, const ReportContext *report_context)
         {
             Constraint *cp = SeqAt(constraints, i);
 
-            if (IsExcluded(cp->classes, NULL))
+            if (!IsDefinedClass(ctx, cp->classes, NULL))
             {
                 continue;
             }
 
-            if (GetVariable("control_monitor", cp->lval, &retval) == cf_notype)
+            if (ScopeGetVariable("control_monitor", cp->lval, &retval) == DATA_TYPE_NONE)
             {
-                CfOut(cf_error, "", "Unknown lval %s in monitor control body", cp->lval);
+                CfOut(OUTPUT_LEVEL_ERROR, "", "Unknown lval %s in monitor control body", cp->lval);
                 continue;
             }
 
-            if (strcmp(cp->lval, CFM_CONTROLBODY[cfm_histograms].lval) == 0)
+            if (strcmp(cp->lval, CFM_CONTROLBODY[MONITOR_CONTROL_HISTOGRAMS].lval) == 0)
             {
                 /* Keep accepting this option for backward compatibility. */
             }
 
-            if (strcmp(cp->lval, CFM_CONTROLBODY[cfm_tcpdump].lval) == 0)
+            if (strcmp(cp->lval, CFM_CONTROLBODY[MONITOR_CONTROL_TCP_DUMP].lval) == 0)
             {
-                MonNetworkSnifferEnable(GetBoolean(retval.item));
+                MonNetworkSnifferEnable(BooleanFromString(retval.item));
             }
 
-            if (strcmp(cp->lval, CFM_CONTROLBODY[cfm_forgetrate].lval) == 0)
+            if (strcmp(cp->lval, CFM_CONTROLBODY[MONITOR_CONTROL_FORGET_RATE].lval) == 0)
             {
                 sscanf(retval.item, "%lf", &FORGETRATE);
                 CfDebug("forget rate = %f\n", FORGETRATE);
@@ -232,12 +248,12 @@ static void KeepPromises(Policy *policy, const ReportContext *report_context)
 /* Level 1                                                                   */
 /*****************************************************************************/
 
-static void ThisAgentInit(void)
+static void ThisAgentInit(EvalContext *ctx)
 {
     umask(077);
     sprintf(VPREFIX, "cf-monitord");
 
-    SetReferenceTime(false);
+    SetReferenceTime(ctx, false);
     SetStartTime();
 
     signal(SIGINT, HandleSignalsForDaemon);

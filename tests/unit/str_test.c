@@ -3,8 +3,7 @@
 
 #include "conversion.h"
 
-#include <setjmp.h>
-#include <cmockery.h>
+#include "test.h"
 
 static const char *lo_alphabet = "abcdefghijklmnopqrstuvwxyz";
 static const char *hi_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -408,10 +407,19 @@ static void test_chop_empty_two_spaces(void **state)
     assert_string_equal("", s);
 }
 
+static void test_ends_with(void **state)
+{
+    assert_true(StringEndsWith("file.json", ".json"));
+    assert_true(StringEndsWith("file.json", "file.json"));
+    assert_false(StringEndsWith(".json", "file"));
+    assert_false(StringEndsWith("a", "aa"));
+}
+
 int main()
 {
+    PRINT_TEST_BANNER();
     const UnitTest tests[] =
-{
+    {
         unit_test(test_mix_case_tolower),
         unit_test(test_empty_tolower),
         unit_test(test_weird_chars_tolower),
@@ -462,6 +470,8 @@ int main()
         unit_test(test_chop_empty),
         unit_test(test_chop_empty_single_space),
         unit_test(test_chop_empty_two_spaces),
+
+        unit_test(test_ends_with)
     };
 
     return run_tests(tests);
@@ -483,7 +493,7 @@ void FatalError(char *s, ...)
     exit(42);
 }
 
-void CfOut(enum cfreport level, const char *errstr, const char *fmt, ...)
+void CfOut(OutputLevel level, const char *errstr, const char *fmt, ...)
 {
     fail();
     exit(42);

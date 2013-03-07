@@ -31,7 +31,7 @@
 extern DBMigrationFunction dbm_migration_plan_bundles[];
 extern DBMigrationFunction dbm_migration_plan_lastseen[];
 
-static DBMigrationFunction *dbm_migration_plans[dbid_max] = {
+static const DBMigrationFunction *dbm_migration_plans[dbid_max] = {
     [dbid_bundles] = dbm_migration_plan_bundles,
     [dbid_lastseen] = dbm_migration_plan_lastseen
 };
@@ -51,12 +51,12 @@ static size_t DBVersion(DBHandle *db)
 
 bool DBMigrate(DBHandle *db, dbid id)
 {
-    DBMigrationFunction *plan = dbm_migration_plans[id];
+    const DBMigrationFunction *plan = dbm_migration_plans[id];
 
     if (plan)
     {
         size_t step_version = 0;
-        for (DBMigrationFunction *step = plan; *step; step++, step_version++)
+        for (const DBMigrationFunction *step = plan; *step; step++, step_version++)
         {
             if (step_version == DBVersion(db))
             {

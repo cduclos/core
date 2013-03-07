@@ -66,7 +66,7 @@ int SendTransaction(int sd, char *buffer, int len, char status)
 
     if (wlen > CF_BUFSIZE - CF_INBAND_OFFSET)
     {
-        CfOut(cf_error, "", "SendTransaction: wlen (%d) > %d - %d", wlen, CF_BUFSIZE, CF_INBAND_OFFSET);
+        CfOut(OUTPUT_LEVEL_ERROR, "", "SendTransaction: wlen (%d) > %d - %d", wlen, CF_BUFSIZE, CF_INBAND_OFFSET);
         FatalError("SendTransaction software failure");
     }
 
@@ -105,7 +105,7 @@ int ReceiveTransaction(int sd, char *buffer, int *more)
 
     if (len > CF_BUFSIZE - CF_INBAND_OFFSET)
     {
-        CfOut(cf_error, "", "Bad transaction packet -- too long (%c %d) Proto = %s ", status, len, proto);
+        CfOut(OUTPUT_LEVEL_ERROR, "", "Bad transaction packet -- too long (%c %d) Proto = %s ", status, len, proto);
         return -1;
     }
 
@@ -140,7 +140,7 @@ int RecvSocketStream(int sd, char buffer[CF_BUFSIZE], int toget, int nothing)
 
     if (toget > CF_BUFSIZE - 1)
     {
-        CfOut(cf_error, "", "Bad software request for overfull buffer");
+        CfOut(OUTPUT_LEVEL_ERROR, "", "Bad software request for overfull buffer");
         return -1;
     }
 
@@ -155,14 +155,14 @@ int RecvSocketStream(int sd, char buffer[CF_BUFSIZE], int toget, int nothing)
 
         if ((got == -1) && (LastRecvTimedOut()))
         {
-            CfOut(cf_error, "recv", "!! Timeout - remote end did not respond with the expected amount of data (received=%d, expecting=%d)",
+            CfOut(OUTPUT_LEVEL_ERROR, "recv", "!! Timeout - remote end did not respond with the expected amount of data (received=%d, expecting=%d)",
                   already, toget);
             return -1;
         }
 
         if (got == -1)
         {
-            CfOut(cf_error, "recv", "Couldn't recv");
+            CfOut(OUTPUT_LEVEL_ERROR, "recv", "Couldn't recv");
             return -1;
         }
 
@@ -198,7 +198,7 @@ int SendSocketStream(int sd, char buffer[CF_BUFSIZE], int tosend, int flags)
 
         if (sent == -1)
         {
-            CfOut(cf_verbose, "send", "Couldn't send");
+            CfOut(OUTPUT_LEVEL_VERBOSE, "send", "Couldn't send");
             return -1;
         }
 
@@ -215,12 +215,10 @@ int SendSocketStream(int sd, char buffer[CF_BUFSIZE], int tosend, int flags)
 int SetReceiveTimeout(int fd, const struct timeval *tv)
 {
     /*
-     * NB: recv() timeout is not portable.  struct timeval is very
-     *     unstable - interpreted differently on different
-     *     platforms. E.g. setting tv_sec to 50 (and tv_usec to 0)
-     *     results in a timeout of 0.5 seconds on Windows, but 50
-     *     seconds on Linux. Thus it must be tested thoroughly on
-     *     the affected platforms. */
+      NB: recv() timeout interpretation differs under Windows: setting tv_sec to
+      50 (and tv_usec to 0) results in a timeout of 0.5 seconds on Windows, but
+      50 seconds on Linux.
+    */
 
 # ifdef __linux__
 

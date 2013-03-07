@@ -70,26 +70,22 @@ void UpdateLastSawHost(const char *hostkey, const char *address,
 
 /*****************************************************************************/
 
-void LastSaw(char *ipaddress, unsigned char digest[EVP_MAX_MD_SIZE + 1], enum roles role)
+void LastSaw(char *ipaddress, unsigned char digest[EVP_MAX_MD_SIZE + 1], LastSeenRole role)
 {
-    char databuf[CF_BUFSIZE];
+    char databuf[EVP_MAX_MD_SIZE * 4];
     char *mapip;
 
     if (strlen(ipaddress) == 0)
     {
-        CfOut(cf_inform, "", "LastSeen registry for empty IP with role %d", role);
+        CfOut(OUTPUT_LEVEL_INFORM, "", "LastSeen registry for empty IP with role %d", role);
         return;
     }
 
-    ThreadLock(cft_output);
-
-    strlcpy(databuf, HashPrint(CF_DEFAULT_DIGEST, digest), CF_BUFSIZE);
-
-    ThreadUnlock(cft_output);
+    HashPrintSafe(CF_DEFAULT_DIGEST, digest, databuf);
 
     mapip = MapAddress(ipaddress);
 
-    UpdateLastSawHost(databuf, mapip, role == cf_accept, time(NULL));
+    UpdateLastSawHost(databuf, mapip, role == LAST_SEEN_ROLE_ACCEPT, time(NULL));
 }
 
 /*****************************************************************************/
@@ -100,7 +96,7 @@ void UpdateLastSawHost(const char *hostkey, const char *address,
     DBHandle *db = NULL;
     if (!OpenDB(&db, dbid_lastseen))
     {
-        CfOut(cf_error, "", " !! Unable to open last seen db");
+        CfOut(OUTPUT_LEVEL_ERROR, "", " !! Unable to open last seen db");
         return;
     }
 
@@ -147,7 +143,7 @@ bool RemoveHostFromLastSeen(const char *hostkey)
     DBHandle *db;
     if (!OpenDB(&db, dbid_lastseen))
     {
-        CfOut(cf_error, "", "Unable to open lastseen database");
+        CfOut(OUTPUT_LEVEL_ERROR, "", "Unable to open lastseen database");
         return false;
     }
 
@@ -235,7 +231,7 @@ bool Address2Hostkey(const char *address, char *result)
         {
             unsigned char digest[EVP_MAX_MD_SIZE + 1];
             HashPubKey(PUBKEY, digest, CF_DEFAULT_DIGEST);
-            snprintf(result, CF_MAXVARSIZE, "%s", HashPrint(CF_DEFAULT_DIGEST, digest));
+            HashPrintSafe(CF_DEFAULT_DIGEST, digest, result);
             return true;
         }
         else
@@ -264,13 +260,13 @@ bool ScanLastSeenQuality(LastSeenQualityCallback callback, void *ctx)
 
     if (!OpenDB(&db, dbid_lastseen))
     {
-        CfOut(cf_error, "", "!! Unable to open lastseen database");
+        CfOut(OUTPUT_LEVEL_ERROR, "", "!! Unable to open lastseen database");
         return false;
     }
 
     if (!NewDBCursor(db, &cursor))
     {
-        CfOut(cf_error, "", " !! Unable to create lastseen database cursor");
+        CfOut(OUTPUT_LEVEL_ERROR, "", " !! Unable to create lastseen database cursor");
         CloseDB(db);
         return false;
     }

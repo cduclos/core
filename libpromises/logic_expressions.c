@@ -42,20 +42,16 @@ static ParseResult ParsePrimary(const char *expr, int start, int end)
 
         if (res.result)
         {
-            /* Check there is a matching ')' at the end */
+            /* Check if there is a matching ')' at the end */
             if (res.position < end && expr[res.position] == ')')
             {
-                return (ParseResult)
-                {
-                res.result, res.position + 1};
+                return (ParseResult) {res.result, res.position + 1};
             }
             else
             {
-                /* Didn't find a matching bracket. Give up */
+                /* Haven't found a matching bracket. Give up */
                 FreeExpression(res.result);
-                return (ParseResult)
-                {
-                NULL, res.position};
+                return (ParseResult) {NULL, res.position};
             }
         }
         else
@@ -74,15 +70,11 @@ static ParseResult ParsePrimary(const char *expr, int start, int end)
             res->op = EVAL;
             res->val.eval.name = strres.result;
 
-            return (ParseResult)
-            {
-            res, strres.position};
+            return (ParseResult) {res, strres.position};
         }
         else
         {
-            return (ParseResult)
-            {
-            NULL, strres.position};
+            return (ParseResult) {NULL, strres.position};
         }
     }
 }
@@ -102,9 +94,7 @@ static ParseResult ParseNotExpression(const char *expr, int start, int end)
             res->op = NOT;
             res->val.not.arg = primres.result;
 
-            return (ParseResult)
-            {
-            res, primres.position};
+            return (ParseResult) {res, primres.position};
         }
         else
         {
@@ -149,9 +139,7 @@ static ParseResult ParseAndExpression(const char *expr, int start, int end)
     res->val.andor.lhs = lhs.result;
     res->val.andor.rhs = rhs.result;
 
-    return (ParseResult)
-    {
-    res, rhs.position};
+    return (ParseResult) {res, rhs.position};
 }
 
 /* <or-expr> */
@@ -197,14 +185,12 @@ ParseResult ParseExpression(const char *expr, int start, int end)
     res->val.andor.lhs = lhs.result;
     res->val.andor.rhs = rhs.result;
 
-    return (ParseResult)
-    {
-    res, rhs.position};
+    return (ParseResult) {res, rhs.position};
 }
 
 /* Evaluation */
 
-ExpressionValue EvalExpression(const Expression *expr,
+ExpressionValue EvalExpression(const EvalContext *ctx, const Expression *expr,
                                NameEvaluator nameevalfn, VarRefEvaluator varrefevalfn, void *param)
 {
     switch (expr->op)
@@ -214,13 +200,13 @@ ExpressionValue EvalExpression(const Expression *expr,
     {
         ExpressionValue lhs = EXP_ERROR, rhs = EXP_ERROR;
 
-        lhs = EvalExpression(expr->val.andor.lhs, nameevalfn, varrefevalfn, param);
+        lhs = EvalExpression(ctx, expr->val.andor.lhs, nameevalfn, varrefevalfn, param);
         if (lhs == EXP_ERROR)
         {
             return EXP_ERROR;
         }
 
-        rhs = EvalExpression(expr->val.andor.rhs, nameevalfn, varrefevalfn, param);
+        rhs = EvalExpression(ctx, expr->val.andor.rhs, nameevalfn, varrefevalfn, param);
 
         if (rhs == EXP_ERROR)
         {
@@ -239,7 +225,8 @@ ExpressionValue EvalExpression(const Expression *expr,
 
     case NOT:
     {
-        ExpressionValue arg = EvalExpression(expr->val.not.arg,
+        ExpressionValue arg = EvalExpression(ctx,
+                                             expr->val.not.arg,
                                              nameevalfn,
                                              varrefevalfn,
                                              param);
@@ -266,7 +253,7 @@ ExpressionValue EvalExpression(const Expression *expr,
             return EXP_ERROR;
         }
 
-        ret = (*nameevalfn) (name, param);
+        ret = (*nameevalfn) (ctx, name, param);
         free(name);
         return ret;
     }

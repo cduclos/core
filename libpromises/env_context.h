@@ -27,71 +27,90 @@
 
 #include "cf3.defs.h"
 
-#include "alphalist.h"
 #include "writer.h"
+#include "set.h"
+#include "sequence.h"
 
-/**
-  The global heap
-  Classes are added to the global heap using NewClass().
-  */
-extern AlphaList VHEAP;
-extern AlphaList VHARDHEAP;
+typedef struct
+{
+    StringSet *contexts;
+    StringSet *contexts_negated;
 
-/**
-  Negated classes
-  Classes may be negated by using the command line option ‘-N’ or by being cancelled during
-  exit status of a classes body: cancel ̇kept etc.
-  */
-extern Item *VNEGHEAP;
+    bool inherits_previous; // whether or not this frame inherits context from the previous frame
+} StackFrame;
 
-/**
-  The bundle heap
-  Classes are added to a local bundle heap using NewBundleClass().
-  */
-extern AlphaList VADDCLASSES;
+struct EvalContext_
+{
+    StringSet *heap_soft;
+    StringSet *heap_hard;
+    StringSet *heap_negated;
+    Item *heap_abort;
+    Item *heap_abort_current_bundle;
 
-/**
-  List of classes that, if defined by a bundle, will cause the bundle to abort
-  */
-extern Item *ABORTBUNDLEHEAP;
+    Seq *stack;
+
+    StringSet *dependency_handles;
+};
+
+EvalContext *EvalContextNew(void);
+void EvalContextDestroy(EvalContext *ctx);
+
+void EvalContextHeapAddSoft(EvalContext *ctx, const char *context, const char *ns);
+void EvalContextHeapAddHard(EvalContext *ctx, const char *context);
+void EvalContextHeapAddNegated(EvalContext *ctx, const char *context);
+void EvalContextHeapAddAbort(EvalContext *ctx, const char *context, const char *activated_on_context);
+void EvalContextHeapAddAbortCurrentBundle(EvalContext *ctx, const char *context, const char *activated_on_context);
+void EvalContextStackFrameAddSoft(EvalContext *ctx, const char *context);
+void EvalContextStackFrameAddNegated(EvalContext *ctx, const char *context);
+
+void EvalContextHeapPersistentSave(const char *context, const char *ns, unsigned int ttl_minutes, ContextStatePolicy policy);
+void EvalContextHeapPersistentRemove(const char *context);
+void EvalContextHeapPersistentLoadAll(EvalContext *ctx);
+
+bool EvalContextHeapContainsSoft(const EvalContext *ctx, const char *context);
+bool EvalContextHeapContainsHard(const EvalContext *ctx, const char *context);
+bool EvalContextHeapContainsNegated(const EvalContext *ctx, const char *context);
+bool EvalContextStackFrameContainsSoft(const EvalContext *ctx, const char *context);
+
+bool EvalContextHeapRemoveSoft(EvalContext *ctx, const char *context);
+bool EvalContextHeapRemoveHard(EvalContext *ctx, const char *context);
+void EvalContextStackFrameRemoveSoft(EvalContext *ctx, const char *context);
+
+void EvalContextHeapClear(EvalContext *ctx);
+void EvalContextStackFrameClear(EvalContext *ctx); // TODO: this should probably not exists
+
+size_t EvalContextHeapMatchCountSoft(const EvalContext *ctx, const char *context_regex);
+size_t EvalContextHeapMatchCountHard(const EvalContext *ctx, const char *context_regex);
+size_t EvalContextStackFrameMatchCountSoft(const EvalContext *ctx, const char *context_regex);
+
+StringSetIterator EvalContextHeapIteratorSoft(const EvalContext *ctx);
+StringSetIterator EvalContextHeapIteratorHard(const EvalContext *ctx);
+StringSetIterator EvalContextHeapIteratorNegated(const EvalContext *ctx);
+StringSetIterator EvalContextStackFrameIteratorSoft(const EvalContext *ctx);
+
+void EvalContextStackPushFrame(EvalContext *ctx, bool inherits_previous);
+void EvalContextStackPopFrame(EvalContext *ctx);
 
 /* - Parsing/evaluating expressions - */
 void ValidateClassSyntax(const char *str);
-bool IsDefinedClass(const char *class, const char *ns);
-bool IsExcluded(const char *exception, const char *ns);
+bool IsDefinedClass(const EvalContext *ctx, const char *context, const char *ns);
 
-bool EvalProcessResult(const char *process_result, AlphaList *proc_attr);
-bool EvalFileResult(const char *file_result, AlphaList *leaf_attr);
+bool EvalProcessResult(EvalContext *ctx, const char *process_result, StringSet *proc_attr);
+bool EvalFileResult(EvalContext *ctx, const char *file_result, StringSet *leaf_attr);
+
+
+// Add new contexts
+void NewBundleClass(EvalContext *ctx, const char *oclass, const char *bundle, const char *ns);
+
+// Remove contexts
+void DeleteClass(EvalContext *ctx, const char *oclass, const char *ns);
 
 /* - Rest - */
 int Abort(void);
-void AddAbortClass(const char *name, const char *classes);
-void KeepClassContextPromise(Promise *pp);
-void PushPrivateClassContext(int inherit);
-void PopPrivateClassContext(void);
-void DeletePrivateClassContext(void);
-void DeleteEntireHeap(void);
-void NewPersistentContext(char *name, char *namespace, unsigned int ttl_minutes, enum statepolicy policy);
-void DeletePersistentContext(const char *name);
-void LoadPersistentContext(void);
-void AddEphemeralClasses(const Rlist *classlist, const char *ns);
-void HardClass(const char *oclass);
-void DeleteHardClass(const char *oclass);
-void NewClass(const char *oclass, const char *namespace);      /* Copies oclass */
-void NewBundleClass(const char *oclass, const char *bundle, const char *namespace);
-Rlist *SplitContextExpression(const char *context, Promise *pp);
-void DeleteClass(const char *oclass, const char *namespace);
-int VarClassExcluded(Promise *pp, char **classes);
-void NewClassesFromString(const char *classlist);
-void NegateClassesFromString(const char *classlist);
-bool IsSoftClass(const char *sp);
-bool IsHardClass(const char *sp);
-bool IsTimeClass(const char *sp);
-void SaveClassEnvironment(void);
-void DeleteAllClasses(const Rlist *list);
-void AddAllClasses(char *namespace, const Rlist *list, int persist, enum statepolicy policy);
-void ListAlphaList(Writer *writer, AlphaList al, char sep);
-void MarkPromiseHandleDone(const Promise *pp);
-int MissingDependencies(const Promise *pp);
+void KeepClassContextPromise(EvalContext *ctx, Promise *pp);
+int VarClassExcluded(EvalContext *ctx, Promise *pp, char **classes);
+void SaveClassEnvironment(EvalContext *ctx, Writer *writer);
+void MarkPromiseHandleDone(EvalContext *ctx, const Promise *pp);
+int MissingDependencies(EvalContext *ctx, const Promise *pp);
 
 #endif

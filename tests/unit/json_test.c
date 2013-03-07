@@ -499,7 +499,7 @@ static void test_iterator_current(void **state)
     {
         assert_int_equal((int)JsonIteratorCurrentElementType(&it),
                          (int)JSON_ELEMENT_TYPE_CONTAINER);
-        assert_int_equal((int)JsonIteratorCurrentContrainerType(&it),
+        assert_int_equal((int)JsonIteratorCurrentContainerType(&it),
                          (int)JSON_CONTAINER_TYPE_ARRAY);
         assert_string_equal(JsonIteratorCurrentKey(&it), "array");
     }
@@ -901,6 +901,7 @@ static void test_detach_key_from_object(void **state)
 
 int main()
 {
+    PRINT_TEST_BANNER();
     const UnitTest tests[] =
     {
         unit_test(test_new_delete),

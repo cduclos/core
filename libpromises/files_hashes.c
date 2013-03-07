@@ -31,19 +31,49 @@
 #include "cfstream.h"
 #include "client_code.h"
 #include "files_lib.h"
+#include "rlist.h"
+#include "policy.h"
 
-static int ReadHash(CF_DB *dbp, enum cfhashes type, char *name, unsigned char digest[EVP_MAX_MD_SIZE + 1]);
-static int WriteHash(CF_DB *dbp, enum cfhashes type, char *name, unsigned char digest[EVP_MAX_MD_SIZE + 1]);
-static void DeleteHash(CF_DB *dbp, enum cfhashes type, char *name);
+static const char *CF_DIGEST_TYPES[10][2] =
+{
+    {"md5", "m"},
+    {"sha224", "c"},
+    {"sha256", "C"},
+    {"sha384", "h"},
+    {"sha512", "H"},
+    {"sha1", "S"},
+    {"sha", "s"},               /* Should come last, since substring */
+    {"best", "b"},
+    {"crypt", "o"},
+    {NULL, NULL}
+};
+
+static const int CF_DIGEST_SIZES[10] =
+{
+    CF_MD5_LEN,
+    CF_SHA224_LEN,
+    CF_SHA256_LEN,
+    CF_SHA384_LEN,
+    CF_SHA512_LEN,
+    CF_SHA1_LEN,
+    CF_SHA_LEN,
+    CF_BEST_LEN,
+    CF_CRYPT_LEN,
+    0
+};
+
+static int ReadHash(CF_DB *dbp, HashMethod type, char *name, unsigned char digest[EVP_MAX_MD_SIZE + 1]);
+static int WriteHash(CF_DB *dbp, HashMethod type, char *name, unsigned char digest[EVP_MAX_MD_SIZE + 1]);
+static void DeleteHash(CF_DB *dbp, HashMethod type, char *name);
 static ChecksumValue *NewHashValue(unsigned char digest[EVP_MAX_MD_SIZE + 1]);
 static char *NewIndexKey(char type, char *name, int *size);
 static void DeleteIndexKey(char *key);
 static void DeleteHashValue(ChecksumValue *value);
-static int FileHashSize(enum cfhashes id);
+static int FileHashSize(HashMethod id);
 
 /*****************************************************************************/
 
-int FileHashChanged(char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], int warnlevel, enum cfhashes type,
+int FileHashChanged(EvalContext *ctx, char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], int warnlevel, HashMethod type,
                     Attributes attr, Promise *pp)
 /* Returns false if filename never seen before, and adds a checksum
    to the database. Returns true if hashes do not match and also potentially
@@ -52,14 +82,15 @@ int FileHashChanged(char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], i
     int i, size = 21;
     unsigned char dbdigest[EVP_MAX_MD_SIZE + 1];
     CF_DB *dbp;
+    char buffer[EVP_MAX_MD_SIZE * 4];
 
-    CfDebug("HashChanged: key %s (type=%d) with data %s\n", filename, type, HashPrint(type, digest));
+    CfDebug("HashChanged: key %s (type=%d) with data %s\n", filename, type, HashPrintSafe(type, digest, buffer));
 
     size = FileHashSize(type);
 
     if (!OpenDB(&dbp, dbid_checksums))
     {
-        cfPS(cf_error, CF_FAIL, "", pp, attr, "Unable to open the hash database!");
+        cfPS(ctx, OUTPUT_LEVEL_ERROR, CF_FAIL, "", pp, attr, "Unable to open the hash database!");
         return false;
     }
 
@@ -80,15 +111,15 @@ int FileHashChanged(char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], i
 
                 if (attr.change.update)
                 {
-                    cfPS(warnlevel, CF_CHG, "", pp, attr, " -> Updating hash for %s to %s", filename,
-                         HashPrint(type, digest));
+                    cfPS(ctx, warnlevel, CF_CHG, "", pp, attr, " -> Updating hash for %s to %s", filename,
+                         HashPrintSafe(type, digest, buffer));
 
                     DeleteHash(dbp, type, filename);
                     WriteHash(dbp, type, filename, digest);
                 }
                 else
                 {
-                    cfPS(warnlevel, CF_FAIL, "", pp, attr, "!! Hash for file \"%s\" changed", filename);
+                    cfPS(ctx, warnlevel, CF_FAIL, "", pp, attr, "!! Hash for file \"%s\" changed", filename);
                 }
 
                 CloseDB(dbp);
@@ -96,19 +127,19 @@ int FileHashChanged(char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], i
             }
         }
 
-        cfPS(cf_verbose, CF_NOP, "", pp, attr, " -> File hash for %s is correct", filename);
+        cfPS(ctx, OUTPUT_LEVEL_VERBOSE, CF_NOP, "", pp, attr, " -> File hash for %s is correct", filename);
         CloseDB(dbp);
         return false;
     }
     else
     {
         /* Key was not found, so install it */
-        cfPS(warnlevel, CF_CHG, "", pp, attr, " !! File %s was not in %s database - new file found", filename,
+        cfPS(ctx, warnlevel, CF_CHG, "", pp, attr, " !! File %s was not in %s database - new file found", filename,
              FileHashName(type));
-        CfDebug("Storing checksum for %s in database %s\n", filename, HashPrint(type, digest));
+        CfDebug("Storing checksum for %s in database %s\n", filename, HashPrintSafe(type, digest, buffer));
         WriteHash(dbp, type, filename, digest);
 
-        LogHashChange(filename, cf_file_new, "New file found", pp);
+        LogHashChange(ctx, filename, FILE_STATE_NEW, "New file found", pp);
 
         CloseDB(dbp);
         return false;
@@ -117,7 +148,7 @@ int FileHashChanged(char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], i
 
 /*******************************************************************/
 
-int CompareFileHashes(char *file1, char *file2, struct stat *sstat, struct stat *dstat, Attributes attr, Promise *pp)
+int CompareFileHashes(EvalContext *ctx, char *file1, char *file2, struct stat *sstat, struct stat *dstat, Attributes attr, Promise *pp)
 {
     unsigned char digest1[EVP_MAX_MD_SIZE + 1] = { 0 }, digest2[EVP_MAX_MD_SIZE + 1] = { 0 };
     int i;
@@ -148,13 +179,13 @@ int CompareFileHashes(char *file1, char *file2, struct stat *sstat, struct stat 
     }
     else
     {
-        return CompareHashNet(file1, file2, attr, pp);  /* client.c */
+        return CompareHashNet(ctx, file1, file2, attr, pp);  /* client.c */
     }
 }
 
 /*******************************************************************/
 
-int CompareBinaryFiles(char *file1, char *file2, struct stat *sstat, struct stat *dstat, Attributes attr, Promise *pp)
+int CompareBinaryFiles(EvalContext *ctx, char *file1, char *file2, struct stat *sstat, struct stat *dstat, Attributes attr, Promise *pp)
 {
     int fd1, fd2, bytes1, bytes2;
     char buff1[BUFSIZ], buff2[BUFSIZ];
@@ -179,7 +210,7 @@ int CompareBinaryFiles(char *file1, char *file2, struct stat *sstat, struct stat
 
             if ((bytes1 != bytes2) || (memcmp(buff1, buff2, bytes1) != 0))
             {
-                CfOut(cf_verbose, "", "Binary Comparison mismatch...\n");
+                CfOut(OUTPUT_LEVEL_VERBOSE, "", "Binary Comparison mismatch...\n");
                 close(fd2);
                 close(fd1);
                 return true;
@@ -195,13 +226,13 @@ int CompareBinaryFiles(char *file1, char *file2, struct stat *sstat, struct stat
     else
     {
         CfDebug("Using network checksum instead\n");
-        return CompareHashNet(file1, file2, attr, pp);  /* client.c */
+        return CompareHashNet(ctx, file1, file2, attr, pp);  /* client.c */
     }
 }
 
 /*******************************************************************/
 
-void HashFile(char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], enum cfhashes type)
+void HashFile(char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], HashMethod type)
 {
     FILE *file;
     EVP_MD_CTX context;
@@ -213,7 +244,7 @@ void HashFile(char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], enum cf
 
     if ((file = fopen(filename, "rb")) == NULL)
     {
-        CfOut(cf_inform, "fopen", "%s can't be opened\n", filename);
+        CfOut(OUTPUT_LEVEL_INFORM, "fopen", "%s can't be opened\n", filename);
     }
     else
     {
@@ -235,7 +266,7 @@ void HashFile(char *filename, unsigned char digest[EVP_MAX_MD_SIZE + 1], enum cf
 
 /*******************************************************************/
 
-void HashString(const char *buffer, int len, unsigned char digest[EVP_MAX_MD_SIZE + 1], enum cfhashes type)
+void HashString(const char *buffer, int len, unsigned char digest[EVP_MAX_MD_SIZE + 1], HashMethod type)
 {
     EVP_MD_CTX context;
     const EVP_MD *md = NULL;
@@ -245,8 +276,8 @@ void HashString(const char *buffer, int len, unsigned char digest[EVP_MAX_MD_SIZ
 
     switch (type)
     {
-    case cf_crypt:
-        CfOut(cf_error, "", "The crypt support is not presently implemented, please use another algorithm instead");
+    case HASH_METHOD_CRYPT:
+        CfOut(OUTPUT_LEVEL_ERROR, "", "The crypt support is not presently implemented, please use another algorithm instead");
         memset(digest, 0, EVP_MAX_MD_SIZE + 1);
         break;
 
@@ -255,7 +286,7 @@ void HashString(const char *buffer, int len, unsigned char digest[EVP_MAX_MD_SIZ
 
         if (md == NULL)
         {
-            CfOut(cf_inform, "", " !! Digest type %s not supported by OpenSSL library", CF_DIGEST_TYPES[type][0]);
+            CfOut(OUTPUT_LEVEL_INFORM, "", " !! Digest type %s not supported by OpenSSL library", CF_DIGEST_TYPES[type][0]);
         }
 
         EVP_DigestInit(&context, md);
@@ -267,7 +298,7 @@ void HashString(const char *buffer, int len, unsigned char digest[EVP_MAX_MD_SIZ
 
 /*******************************************************************/
 
-void HashPubKey(RSA *key, unsigned char digest[EVP_MAX_MD_SIZE + 1], enum cfhashes type)
+void HashPubKey(RSA *key, unsigned char digest[EVP_MAX_MD_SIZE + 1], HashMethod type)
 {
     EVP_MD_CTX context;
     const EVP_MD *md = NULL;
@@ -297,8 +328,8 @@ void HashPubKey(RSA *key, unsigned char digest[EVP_MAX_MD_SIZE + 1], enum cfhash
 
     switch (type)
     {
-    case cf_crypt:
-        CfOut(cf_error, "", "The crypt support is not presently implemented, please use sha256 instead");
+    case HASH_METHOD_CRYPT:
+        CfOut(OUTPUT_LEVEL_ERROR, "", "The crypt support is not presently implemented, please use sha256 instead");
         break;
 
     default:
@@ -306,7 +337,7 @@ void HashPubKey(RSA *key, unsigned char digest[EVP_MAX_MD_SIZE + 1], enum cfhash
 
         if (md == NULL)
         {
-            CfOut(cf_inform, "", " !! Digest type %s not supported by OpenSSL library", CF_DIGEST_TYPES[type][0]);
+            CfOut(OUTPUT_LEVEL_INFORM, "", " !! Digest type %s not supported by OpenSSL library", CF_DIGEST_TYPES[type][0]);
         }
 
         EVP_DigestInit(&context, md);
@@ -325,14 +356,15 @@ void HashPubKey(RSA *key, unsigned char digest[EVP_MAX_MD_SIZE + 1], enum cfhash
 /*******************************************************************/
 
 int HashesMatch(unsigned char digest1[EVP_MAX_MD_SIZE + 1], unsigned char digest2[EVP_MAX_MD_SIZE + 1],
-                enum cfhashes type)
+                HashMethod type)
 {
     int i, size = EVP_MAX_MD_SIZE;
+    char buffer[EVP_MAX_MD_SIZE * 4];
 
     size = FileHashSize(type);
 
-    CfDebug("1. CHECKING DIGEST type %d - size %d (%s)\n", type, size, HashPrint(type, digest1));
-    CfDebug("2. CHECKING DIGEST type %d - size %d (%s)\n", type, size, HashPrint(type, digest2));
+    CfDebug("1. CHECKING DIGEST type %d - size %d (%s)\n", type, size, HashPrintSafe(type, digest1, buffer));
+    CfDebug("2. CHECKING DIGEST type %d - size %d (%s)\n", type, size, HashPrintSafe(type, digest2, buffer));
 
     for (i = 0; i < size; i++)
     {
@@ -345,24 +377,7 @@ int HashesMatch(unsigned char digest1[EVP_MAX_MD_SIZE + 1], unsigned char digest
     return true;
 }
 
-/*********************************************************************/
-
-char *HashPrint(enum cfhashes type, unsigned char digest[EVP_MAX_MD_SIZE + 1])
-/** 
- * WARNING: Not thread-safe (returns pointer to global memory).
- * Use HashPrintSafe for a thread-safe equivalent
- */
-{
-    static char buffer[EVP_MAX_MD_SIZE * 4];
-
-    HashPrintSafe(type, digest, buffer);
-
-    return buffer;
-}
-
-/*********************************************************************/
-
-char *HashPrintSafe(enum cfhashes type, unsigned char digest[EVP_MAX_MD_SIZE + 1], char buffer[EVP_MAX_MD_SIZE * 4])
+char *HashPrintSafe(HashMethod type, unsigned char digest[EVP_MAX_MD_SIZE + 1], char buffer[EVP_MAX_MD_SIZE * 4])
 /**
  * Thread safe. Note the buffer size.
  */
@@ -371,7 +386,7 @@ char *HashPrintSafe(enum cfhashes type, unsigned char digest[EVP_MAX_MD_SIZE + 1
 
     switch (type)
     {
-    case cf_md5:
+    case HASH_METHOD_MD5:
         sprintf(buffer, "MD5=  ");
         break;
     default:
@@ -383,6 +398,8 @@ char *HashPrintSafe(enum cfhashes type, unsigned char digest[EVP_MAX_MD_SIZE + 1
     {
         sprintf((char *) (buffer + 4 + 2 * i), "%02x", digest[i]);
     }
+
+    buffer[4 + 2*CF_DIGEST_SIZES[type]] = '\0';
 
     return buffer;
 }
@@ -402,7 +419,7 @@ char *SkipHashType(char *hash)
 
 /***************************************************************/
 
-void PurgeHashes(char *path, Attributes attr, Promise *pp)
+void PurgeHashes(EvalContext *ctx, char *path, Attributes attr, Promise *pp)
 /* Go through the database and purge records about non-existent files */
 {
     CF_DB *dbp;
@@ -431,7 +448,7 @@ void PurgeHashes(char *path, Attributes attr, Promise *pp)
 
     if (!NewDBCursor(dbp, &dbcp))
     {
-        CfOut(cf_inform, "", " !! Unable to scan hash database");
+        CfOut(OUTPUT_LEVEL_INFORM, "", " !! Unable to scan hash database");
         CloseDB(dbp);
         return;
     }
@@ -450,10 +467,10 @@ void PurgeHashes(char *path, Attributes attr, Promise *pp)
             }
             else
             {
-                cfPS(cf_error, CF_WARN, "", pp, attr, "ALERT: File %s no longer exists!", obj);
+                cfPS(ctx, OUTPUT_LEVEL_ERROR, CF_WARN, "", pp, attr, "ALERT: File %s no longer exists!", obj);
             }
 
-            LogHashChange(obj, cf_file_removed, "File removed", pp);
+            LogHashChange(ctx, obj, FILE_STATE_REMOVED, "File removed", pp);
         }
 
         memset(&key, 0, sizeof(key));
@@ -466,7 +483,7 @@ void PurgeHashes(char *path, Attributes attr, Promise *pp)
 
 /*****************************************************************************/
 
-static int ReadHash(CF_DB *dbp, enum cfhashes type, char *name, unsigned char digest[EVP_MAX_MD_SIZE + 1])
+static int ReadHash(CF_DB *dbp, HashMethod type, char *name, unsigned char digest[EVP_MAX_MD_SIZE + 1])
 {
     char *key;
     int size;
@@ -490,7 +507,7 @@ static int ReadHash(CF_DB *dbp, enum cfhashes type, char *name, unsigned char di
 
 /*****************************************************************************/
 
-static int WriteHash(CF_DB *dbp, enum cfhashes type, char *name, unsigned char digest[EVP_MAX_MD_SIZE + 1])
+static int WriteHash(CF_DB *dbp, HashMethod type, char *name, unsigned char digest[EVP_MAX_MD_SIZE + 1])
 {
     char *key;
     ChecksumValue *value;
@@ -506,7 +523,7 @@ static int WriteHash(CF_DB *dbp, enum cfhashes type, char *name, unsigned char d
 
 /*****************************************************************************/
 
-static void DeleteHash(CF_DB *dbp, enum cfhashes type, char *name)
+static void DeleteHash(CF_DB *dbp, HashMethod type, char *name)
 {
     int size;
     char *key;
@@ -568,14 +585,29 @@ static void DeleteHashValue(ChecksumValue *chk_val)
 
 /*********************************************************************/
 
-const char *FileHashName(enum cfhashes id)
+const char *FileHashName(HashMethod id)
 {
     return CF_DIGEST_TYPES[id][0];
 }
 
 /***************************************************************************/
 
-static int FileHashSize(enum cfhashes id)
+static int FileHashSize(HashMethod id)
 {
     return CF_DIGEST_SIZES[id];
+}
+
+HashMethod HashMethodFromString(char *typestr)
+{
+    int i;
+
+    for (i = 0; CF_DIGEST_TYPES[i][0] != NULL; i++)
+    {
+        if (typestr && (strcmp(typestr, CF_DIGEST_TYPES[i][0]) == 0))
+        {
+            return (HashMethod) i;
+        }
+    }
+
+    return HASH_METHOD_NONE;
 }

@@ -25,7 +25,7 @@
 
 #include "files_names.h"
 
-#include "constraints.h"
+#include "policy.h"
 #include "promises.h"
 #include "cf3.defs.h"
 #include "dir.h"
@@ -37,9 +37,13 @@
 #include "logging.h"
 #include "string_lib.h"
 
+#ifdef HAVE_NOVA
+#include "cf.nova.h"
+#endif
+
 /*********************************************************************/
 
-int IsNewerFileTree(char *dir, time_t reftime)
+int IsNewerFileTree(EvalContext *ctx, char *dir, time_t reftime)
 {
     const struct dirent *dirp;
     char path[CF_BUFSIZE] = { 0 };
@@ -51,7 +55,7 @@ int IsNewerFileTree(char *dir, time_t reftime)
 
     if (lstat(dir, &sb) == -1)
     {
-        CfOut(cf_error, "stat", " !! Unable to stat directory %s in IsNewerFileTree", dir);
+        CfOut(OUTPUT_LEVEL_ERROR, "stat", " !! Unable to stat directory %s in IsNewerFileTree", dir);
         // return true to provoke update
         return true;
     }
@@ -60,21 +64,21 @@ int IsNewerFileTree(char *dir, time_t reftime)
     {
         if (sb.st_mtime > reftime)
         {
-            CfOut(cf_verbose, "", " >> Detected change in %s", dir);
+            CfOut(OUTPUT_LEVEL_VERBOSE, "", " >> Detected change in %s", dir);
             return true;
         }
     }
 
     if ((dirh = OpenDirLocal(dir)) == NULL)
     {
-        CfOut(cf_error, "opendir", " !! Unable to open directory '%s' in IsNewerFileTree", dir);
+        CfOut(OUTPUT_LEVEL_ERROR, "opendir", " !! Unable to open directory '%s' in IsNewerFileTree", dir);
         return false;
     }
     else
     {
         for (dirp = ReadDir(dirh); dirp != NULL; dirp = ReadDir(dirh))
         {
-            if (!ConsiderFile(dirp->d_name, dir, dummyattr, NULL))
+            if (!ConsiderFile(ctx, dirp->d_name, dir, dummyattr, NULL))
             {
                 continue;
             }
@@ -83,7 +87,7 @@ int IsNewerFileTree(char *dir, time_t reftime)
 
             if (!JoinPath(path, dirp->d_name))
             {
-                CfOut(cf_error, "", "Internal limit: Buffer ran out of space adding %s to %s in IsNewerFileTree", dir,
+                CfOut(OUTPUT_LEVEL_ERROR, "", "Internal limit: Buffer ran out of space adding %s to %s in IsNewerFileTree", dir,
                       path);
                 CloseDir(dirh);
                 return false;
@@ -91,7 +95,7 @@ int IsNewerFileTree(char *dir, time_t reftime)
 
             if (lstat(path, &sb) == -1)
             {
-                CfOut(cf_error, "stat", " !! Unable to stat directory %s in IsNewerFileTree", path);
+                CfOut(OUTPUT_LEVEL_ERROR, "stat", " !! Unable to stat directory %s in IsNewerFileTree", path);
                 CloseDir(dirh);
                 // return true to provoke update
                 return true;
@@ -101,13 +105,13 @@ int IsNewerFileTree(char *dir, time_t reftime)
             {
                 if (sb.st_mtime > reftime)
                 {
-                    CfOut(cf_verbose, "", " >> Detected change in %s", path);
+                    CfOut(OUTPUT_LEVEL_VERBOSE, "", " >> Detected change in %s", path);
                     CloseDir(dirh);
                     return true;
                 }
                 else
                 {
-                    if (IsNewerFileTree(path, reftime))
+                    if (IsNewerFileTree(ctx, path, reftime))
                     {
                         CloseDir(dirh);
                         return true;
@@ -156,13 +160,13 @@ char *JoinPath(char *path, const char *leaf)
 
     if (Chop(path, CF_EXPANDSIZE) == -1)
     {
-        CfOut(cf_error, "", "Chop was called on a string that seemed to have no terminator");
+        CfOut(OUTPUT_LEVEL_ERROR, "", "Chop was called on a string that seemed to have no terminator");
     }
     AddSlash(path);
 
     if ((strlen(path) + len) > (CF_BUFSIZE - CF_BUFFERMARGIN))
     {
-        CfOut(cf_error, "", "Internal limit 1: Buffer ran out of space constructing string. Tried to add %s to %s\n",
+        CfOut(OUTPUT_LEVEL_ERROR, "", "Internal limit 1: Buffer ran out of space constructing string. Tried to add %s to %s\n",
               leaf, path);
         return NULL;
     }
@@ -179,13 +183,13 @@ char *JoinSuffix(char *path, char *leaf)
 
     if (Chop(path, CF_EXPANDSIZE) == -1)
     {
-        CfOut(cf_error, "", "Chop was called on a string that seemed to have no terminator");
+        CfOut(OUTPUT_LEVEL_ERROR, "", "Chop was called on a string that seemed to have no terminator");
     }
     DeleteSlash(path);
 
     if ((strlen(path) + len) > (CF_BUFSIZE - CF_BUFFERMARGIN))
     {
-        CfOut(cf_error, "", "Internal limit 2: Buffer ran out of space constructing string. Tried to add %s to %s\n",
+        CfOut(OUTPUT_LEVEL_ERROR, "", "Internal limit 2: Buffer ran out of space constructing string. Tried to add %s to %s\n",
               leaf, path);
         return NULL;
     }
@@ -193,89 +197,6 @@ char *JoinSuffix(char *path, char *leaf)
     strcat(path, leaf);
     return path;
 }
-
-/*********************************************************************/
-
-int StartJoin(char *path, char *leaf, int bufsize)
-{
-    memset(path, 0, bufsize);
-    return JoinMargin(path, leaf, NULL, bufsize, CF_BUFFERMARGIN);
-}
-
-/*********************************************************************/
-
-int Join(char *path, const char *leaf, int bufsize)
-{
-    return JoinMargin(path, leaf, NULL, bufsize, CF_BUFFERMARGIN);
-}
-
-/*********************************************************************/
-
-int JoinSilent(char *path, const char *leaf, int bufsize)
-/* Don't warn on buffer limits - just return the value */
-{
-    int len = strlen(leaf);
-
-    if ((strlen(path) + len) > (bufsize - CF_BUFFERMARGIN))
-    {
-        strncat(path, leaf, (bufsize - CF_BUFFERMARGIN));
-        EndJoin(path, "...TRUNCATED", bufsize);
-
-        return false;
-    }
-
-    strcat(path, leaf);
-
-    return true;
-}
-
-/*********************************************************************/
-
-int EndJoin(char *path, char *leaf, int bufsize)
-{
-    return JoinMargin(path, leaf, NULL, bufsize, 0);
-}
-
-/*********************************************************************/
-
-int JoinMargin(char *path, const char *leaf, char **nextFree, int bufsize, int margin)
-{
-    int len = strlen(leaf);
-
-    if (margin < 0)
-    {
-        FatalError("Negative margin in JoinMargin()");
-    }
-
-    if (nextFree)
-    {
-        if ((*nextFree - path) + len > (bufsize - margin))
-        {
-            CfOut(cf_error, "",
-                  "Internal limit 3: Buffer ran out of space constructing string (using nextFree), len = %zd > %d.\n",
-                  (strlen(path) + len), (bufsize - CF_BUFFERMARGIN));
-            return false;
-        }
-
-        strcpy(*nextFree, leaf);
-        *nextFree += len;
-    }
-    else
-    {
-        if ((strlen(path) + len) > (bufsize - margin))
-        {
-            CfOut(cf_error, "", "Internal limit 4: Buffer ran out of space constructing string (%zd > %d).\n",
-                  (strlen(path) + len), (bufsize - CF_BUFFERMARGIN));
-            return false;
-        }
-
-        strcat(path, leaf);
-    }
-
-    return true;
-}
-
-/*********************************************************************/
 
 int IsAbsPath(char *path)
 {
@@ -608,7 +529,7 @@ int CompressPath(char *dest, const char *src)
         {
             if (nodelen > CF_MAXLINKSIZE)
             {
-                CfOut(cf_error, "", "Link in path suspiciously large");
+                CfOut(OUTPUT_LEVEL_ERROR, "", "Link in path suspiciously large");
                 return false;
             }
         }

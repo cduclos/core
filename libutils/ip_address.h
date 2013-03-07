@@ -28,7 +28,11 @@
 #include "buffer.h"
 
 typedef struct IPAddress IPAddress;
-enum IP_ADDRESS_TYPE { IPV4, IPV6 };
+typedef enum
+{
+    IP_ADDRESS_TYPE_IPV4,
+    IP_ADDRESS_TYPE_IPV6
+} IPAddressVersion;
 
 /**
   @brief Creates a new IPAddress object from a string.

@@ -1,11 +1,9 @@
-#include <setjmp.h>
-#include <sys/types.h>
-#include <stdarg.h>
+#include "test.h"
+
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
-#include "cmockery.h"
 #include "buffer.h"
 #include "ip_address.c"
 #include "ip_address.h"
@@ -287,7 +285,7 @@ static void test_generic_interface(void **state)
     assert_true(BufferSet(buffer, "127.0.0.1", strlen("127.0.0.1")) > 0);
     address = IPAddressNew(buffer);
     assert_true(address != NULL);
-    assert_int_equal(IPV4, IPAddressType(address));
+    assert_int_equal(IP_ADDRESS_TYPE_IPV4, IPAddressType(address));
     assert_string_equal("127.0.0.1", BufferData(IPAddressGetAddress(address)));
     assert_int_equal(0, IPAddressGetPort(address));
     assert_int_equal(0, IPAddressDestroy(&address));
@@ -295,7 +293,7 @@ static void test_generic_interface(void **state)
     assert_true(BufferSet(buffer, "127.0.0.1:8080", strlen("127.0.0.1:8080")) > 0);
     address = IPAddressNew(buffer);
     assert_true(address != NULL);
-    assert_int_equal(IPV4, IPAddressType(address));
+    assert_int_equal(IP_ADDRESS_TYPE_IPV4, IPAddressType(address));
     assert_string_equal("127.0.0.1", BufferData(IPAddressGetAddress(address)));
     assert_int_equal(8080, IPAddressGetPort(address));
     assert_int_equal(0, IPAddressDestroy(&address));
@@ -303,7 +301,7 @@ static void test_generic_interface(void **state)
     assert_true(BufferSet(buffer, "0:1:2:3:4:5:6:7", strlen("0:1:2:3:4:5:6:7")) > 0);
     address = IPAddressNew(buffer);
     assert_true(address != NULL);
-    assert_int_equal(IPV6, IPAddressType(address));
+    assert_int_equal(IP_ADDRESS_TYPE_IPV6, IPAddressType(address));
     assert_string_equal("0:1:2:3:4:5:6:7", BufferData(IPAddressGetAddress(address)));
     assert_int_equal(0, IPAddressGetPort(address));
     assert_int_equal(0, IPAddressDestroy(&address));
@@ -311,7 +309,7 @@ static void test_generic_interface(void **state)
     assert_true(BufferSet(buffer, "[0:1:2:3:4:5:6:7]:9090", strlen("[0:1:2:3:4:5:6:7]:9090")) > 0);
     address = IPAddressNew(buffer);
     assert_true(address != NULL);
-    assert_int_equal(IPV6, IPAddressType(address));
+    assert_int_equal(IP_ADDRESS_TYPE_IPV6, IPAddressType(address));
     assert_string_equal("0:1:2:3:4:5:6:7", BufferData(IPAddressGetAddress(address)));
     assert_int_equal(9090, IPAddressGetPort(address));
     assert_int_equal(0, IPAddressDestroy(&address));
@@ -321,7 +319,9 @@ static void test_generic_interface(void **state)
 
 int main()
 {
-    const UnitTest tests[] = {
+    PRINT_TEST_BANNER();
+    const UnitTest tests[] =
+    {
         unit_test(test_ipv4)
         , unit_test(test_char2hex)
         , unit_test(test_ipv6)

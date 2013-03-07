@@ -4,7 +4,6 @@
 #include "array_map_priv.h"
 #include "hash_map_priv.h"
 #include "map.h"
-#include "string_map.h"
 #include "string_lib.h"
 
 #include "alloc.h"
@@ -181,6 +180,7 @@ static void test_hashmap_degenerate_hash_fn(void **state)
 
 int main()
 {
+    PRINT_TEST_BANNER();
     const UnitTest tests[] =
     {
         unit_test(test_new_destroy),

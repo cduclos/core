@@ -29,30 +29,14 @@
 #include "assoc.h"
 
 void LoadSystemConstants(void);
-void ForceScalar(char *lval, char *rval);
-void NewScalar(const char *scope, const char *lval, const char *rval, enum cfdatatype dt);
-void DeleteScalar(const char *scope, const char *lval);
-void NewList(const char *scope, const char *lval, void *rval, enum cfdatatype dt);
-void DefaultVarPromise(Promise *pp);
 
-/*
- * Do not modify returned Rval, its contents may be constant and statically
- * allocated.
- */
-enum cfdatatype GetVariable(const char *scope, const char *lval, Rval *returnv);
-
-void DeleteVariable(const char *scope, const char *id);
-bool StringContainsVar(const char *s, const char *v);
-int DefinedVariable(char *name);
-bool IsCf3VarString(const char *str);
-int BooleanControl(const char *scope, const char *name);
 const char *ExtractInnerCf3VarString(const char *str, char *substr);
 const char *ExtractOuterCf3VarString(const char *str, char *substr);
 int UnresolvedArgs(Rlist *args);
 int UnresolvedVariables(CfAssoc *ap, char rtype);
 int IsQualifiedVariable(char *var);
-int IsCfList(char *type);
-int AddVariableHash(const char *scope, const char *lval, Rval rval, enum cfdatatype dtype, const char *fname, int no);
-void DeRefListsInHashtable(char *scope, Rlist *list, Rlist *reflist);
+
+bool StringContainsVar(const char *s, const char *v);
+bool IsCf3VarString(const char *str);
 
 #endif

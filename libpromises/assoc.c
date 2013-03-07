@@ -25,8 +25,9 @@
 #include "assoc.h"
 
 #include "hashes.h"
+#include "rlist.h"
 
-CfAssoc *NewAssoc(const char *lval, Rval rval, enum cfdatatype dt)
+CfAssoc *NewAssoc(const char *lval, Rval rval, DataType dt)
 {
     CfAssoc *ap;
 
@@ -35,7 +36,7 @@ CfAssoc *NewAssoc(const char *lval, Rval rval, enum cfdatatype dt)
 /* Make a private copy because promises are ephemeral in expansion phase */
 
     ap->lval = xstrdup(lval);
-    ap->rval = CopyRvalItem(rval);
+    ap->rval = RvalCopy(rval);
     ap->dtype = dt;
 
     return ap;
@@ -53,7 +54,7 @@ void DeleteAssoc(CfAssoc *ap)
     CfDebug(" ----> Delete variable association %s\n", ap->lval);
 
     free(ap->lval);
-    DeleteRvalItem(ap->rval);
+    RvalDestroy(ap->rval);
 
     free(ap);
 
@@ -69,21 +70,6 @@ CfAssoc *CopyAssoc(CfAssoc *old)
     }
 
     return NewAssoc(old->lval, old->rval, old->dtype);
-}
-
-/*******************************************************************/
-
-CfAssoc *AssocNewReference(const char *lval, Rval rval, enum cfdatatype dtype)
-{
-    CfAssoc *ap = NULL;
-
-    ap = xmalloc(sizeof(CfAssoc));
-
-    ap->lval = xstrdup(lval);
-    ap->rval = rval;
-    ap->dtype = dtype;
-
-    return ap;
 }
 
 /*
@@ -127,7 +113,7 @@ AssocHashTable *HashInit(void)
 
 void HashCopy(AssocHashTable *newhash, AssocHashTable *oldhash)
 {
-    HashIterator i = HashIteratorInit(oldhash);
+    AssocHashTableIterator i = HashIteratorInit(oldhash);
     CfAssoc *assoc;
 
     while ((assoc = HashIteratorNext(&i)))
@@ -167,7 +153,7 @@ static void HashConvertToHuge(AssocHashTable *hashtable)
 
 /*******************************************************************/
 
-static bool HugeHashInsertElement(AssocHashTable *hashtable, const char *element, Rval rval, enum cfdatatype dtype)
+static bool HugeHashInsertElement(AssocHashTable *hashtable, const char *element, Rval rval, DataType dtype)
 {
     int bucket = GetHash(element, CF_HASHTABLESIZE);
     int i = bucket;
@@ -197,7 +183,7 @@ static bool HugeHashInsertElement(AssocHashTable *hashtable, const char *element
 
 /*******************************************************************/
 
-static bool TinyHashInsertElement(AssocHashTable *hashtable, const char *element, Rval rval, enum cfdatatype dtype)
+static bool TinyHashInsertElement(AssocHashTable *hashtable, const char *element, Rval rval, DataType dtype)
 {
     int i;
 
@@ -231,7 +217,7 @@ static bool TinyHashInsertElement(AssocHashTable *hashtable, const char *element
 
 /*******************************************************************/
 
-bool HashInsertElement(AssocHashTable *hashtable, const char *element, Rval rval, enum cfdatatype dtype)
+bool HashInsertElement(AssocHashTable *hashtable, const char *element, Rval rval, DataType dtype)
 {
     if (hashtable->huge)
     {
@@ -434,14 +420,14 @@ void HashFree(AssocHashTable *hashtable)
 
 /*******************************************************************/
 
-HashIterator HashIteratorInit(AssocHashTable *hashtable)
+AssocHashTableIterator HashIteratorInit(AssocHashTable *hashtable)
 {
-    return (HashIterator) { hashtable, 0 };
+    return (AssocHashTableIterator) { hashtable, 0 };
 }
 
 /*******************************************************************/
 
-static CfAssoc *HugeHashIteratorNext(HashIterator *i)
+static CfAssoc *HugeHashIteratorNext(AssocHashTableIterator *i)
 {
     CfAssoc **buckets = i->hashtable->buckets;
 
@@ -465,7 +451,7 @@ static CfAssoc *HugeHashIteratorNext(HashIterator *i)
 
 /*******************************************************************/
 
-static CfAssoc *TinyHashIteratorNext(HashIterator *i)
+static CfAssoc *TinyHashIteratorNext(AssocHashTableIterator *i)
 {
     if (i->pos >= i->hashtable->array.size)
     {
@@ -479,7 +465,7 @@ static CfAssoc *TinyHashIteratorNext(HashIterator *i)
 
 /*******************************************************************/
 
-CfAssoc *HashIteratorNext(HashIterator *i)
+CfAssoc *HashIteratorNext(AssocHashTableIterator *i)
 {
     if (i->hashtable->huge)
     {
@@ -488,23 +474,5 @@ CfAssoc *HashIteratorNext(HashIterator *i)
     else
     {
         return TinyHashIteratorNext(i);
-    }
-}
-
-/*******************************************************************/
-
-void HashToList(Scope *sp, Rlist **list)
-{
-    if (sp == NULL)
-    {
-        return;
-    }
-
-    HashIterator i = HashIteratorInit(sp->hashtable);
-    CfAssoc *assoc;
-
-    while ((assoc = HashIteratorNext(&i)))
-    {
-        PrependRScalar(list, assoc->lval, CF_SCALAR);
     }
 }

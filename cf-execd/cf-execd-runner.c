@@ -35,6 +35,12 @@
 #include "logging.h"
 #include "exec_tools.h"
 
+#ifdef HAVE_NOVA
+# if defined(__MINGW32__)
+#  include "win_execd_pipe.h"
+# endif
+#endif
+
 /*******************************************************************/
 
 static const int INF_LINES = -2;
@@ -105,6 +111,45 @@ static void ConstructFailsafeCommand(bool scheduled_run, char *buffer)
              CFWORKDIR, AgentFilename(), scheduled_run ? ":scheduled_run" : "");
 }
 
+#ifndef __MINGW32__
+
+static bool IsReadReady(int fd, int timeout_sec)
+{
+    fd_set  rset;
+    FD_ZERO(&rset);
+    FD_SET(fd, &rset);
+
+    struct timeval tv = {
+        .tv_sec = timeout_sec,
+        .tv_usec = 0,
+    };
+
+    int ret = select(fd + 1, &rset, NULL, NULL, &tv);
+
+    if(ret < 0)
+    {
+        CfOut(OUTPUT_LEVEL_ERROR, "select", "!! IsReadReady: Failed checking for data");
+        return false;
+    }
+
+    if(FD_ISSET(fd, &rset))
+    {
+        return true;
+    }
+
+    if(ret == 0)  // timeout
+    {
+        return false;
+    }
+
+    // can we get here?
+    CfOut(OUTPUT_LEVEL_ERROR, "select", "!! IsReadReady: Unknown outcome (ret > 0 but our only fd is not set)");
+
+    return false;
+}
+
+#endif  /* __MINGW32__ */
+
 void LocalExec(const ExecConfig *config)
 {
     FILE *pp;
@@ -121,9 +166,9 @@ void LocalExec(const ExecConfig *config)
 
     cf_strtimestamp_local(starttime, starttime_str);
 
-    CfOut(cf_verbose, "", "------------------------------------------------------------------\n\n");
-    CfOut(cf_verbose, "", "  LocalExec(%sscheduled) at %s\n", config->scheduled_run ? "" : "not ", starttime_str);
-    CfOut(cf_verbose, "", "------------------------------------------------------------------\n");
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", "------------------------------------------------------------------\n\n");
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", "  LocalExec(%sscheduled) at %s\n", config->scheduled_run ? "" : "not ", starttime_str);
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", "------------------------------------------------------------------\n");
 
 /* Need to make sure we have LD_LIBRARY_PATH here or children will die  */
 
@@ -155,7 +200,7 @@ void LocalExec(const ExecConfig *config)
 
     if ((fp = fopen(filename, "w")) == NULL)
     {
-        CfOut(cf_error, "fopen", "!! Couldn't open \"%s\" - aborting exec\n", filename);
+        CfOut(OUTPUT_LEVEL_ERROR, "fopen", "!! Couldn't open \"%s\" - aborting exec\n", filename);
         return;
     }
 
@@ -170,16 +215,16 @@ void LocalExec(const ExecConfig *config)
     }
 #endif
 
-    CfOut(cf_verbose, "", " -> Command => %s\n", cmd);
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> Command => %s\n", cmd);
 
     if ((pp = cf_popen_sh(esc_command, "r")) == NULL)
     {
-        CfOut(cf_error, "cf_popen", "!! Couldn't open pipe to command \"%s\"\n", cmd);
+        CfOut(OUTPUT_LEVEL_ERROR, "cf_popen", "!! Couldn't open pipe to command \"%s\"\n", cmd);
         fclose(fp);
         return;
     }
 
-    CfOut(cf_verbose, "", " -> Command is executing...%s\n", esc_command);
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> Command is executing...%s\n", esc_command);
 
     while (!feof(pp))
     {
@@ -189,7 +234,7 @@ void LocalExec(const ExecConfig *config)
             snprintf(errmsg, sizeof(errmsg), "cf-execd: !! Timeout waiting for output from agent (agent_expireafter=%d) - terminating it",
                      config->agent_expireafter);
 
-            CfOut(cf_error, "", "%s", errmsg);
+            CfOut(OUTPUT_LEVEL_ERROR, "", "%s", errmsg);
             fprintf(fp, "%s\n", errmsg);
             count++;
 
@@ -201,7 +246,7 @@ void LocalExec(const ExecConfig *config)
             }
             else
             {
-                CfOut(cf_error, "", "!! Could not get PID of agent");
+                CfOut(OUTPUT_LEVEL_ERROR, "", "!! Could not get PID of agent");
             }
 
             break;
@@ -260,7 +305,7 @@ void LocalExec(const ExecConfig *config)
                     line_escaped[sizeof(line_escaped) - 2] = '\n';
                 }
 
-                CfOut(cf_inform, "", "%s", line_escaped);
+                CfOut(OUTPUT_LEVEL_INFORM, "", "%s", line_escaped);
             }
 
             line[0] = '\0';
@@ -272,16 +317,16 @@ void LocalExec(const ExecConfig *config)
     CfDebug("Closing fp\n");
     fclose(fp);
 
-    CfOut(cf_verbose, "", " -> Command is complete\n");
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> Command is complete\n");
 
     if (count)
     {
-        CfOut(cf_verbose, "", " -> Mailing result\n");
+        CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> Mailing result\n");
         MailResult(config, filename);
     }
     else
     {
-        CfOut(cf_verbose, "", " -> No output\n");
+        CfOut(OUTPUT_LEVEL_VERBOSE, "", " -> No output\n");
         unlink(filename);
     }
 }
@@ -335,7 +380,7 @@ static int CompareResult(char *filename, char *prev_file)
     FILE *fp;
     int rtn = 0;
 
-    CfOut(cf_verbose, "", "Comparing files  %s with %s\n", prev_file, filename);
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", "Comparing files  %s with %s\n", prev_file, filename);
 
     if ((fp = fopen(prev_file, "r")) != NULL)
     {
@@ -368,7 +413,7 @@ static int CompareResult(char *filename, char *prev_file)
 
     if (!ThreadLock(cft_count))
     {
-        CfOut(cf_error, "", "!! Severe lock error when mailing in exec");
+        CfOut(OUTPUT_LEVEL_ERROR, "", "!! Severe lock error when mailing in exec");
         return 1;
     }
 
@@ -378,7 +423,7 @@ static int CompareResult(char *filename, char *prev_file)
 
     if (!LinkOrCopy(filename, prev_file, true))
     {
-        CfOut(cf_inform, "", "Could not symlink or copy %s to %s", filename, prev_file);
+        CfOut(OUTPUT_LEVEL_INFORM, "", "Could not symlink or copy %s to %s", filename, prev_file);
         rtn = 1;
     }
 
@@ -399,7 +444,7 @@ static void MailResult(const ExecConfig *config, char *file)
 #endif
     FILE *fp;
 
-    CfOut(cf_verbose, "", "Mail result...\n");
+    CfOut(OUTPUT_LEVEL_VERBOSE, "", "Mail result...\n");
 
     if (cfstat(file, &statbuf) == -1)
     {
@@ -418,14 +463,14 @@ static void MailResult(const ExecConfig *config, char *file)
 
     if (CompareResult(file, prev_file) == 0)
     {
-        CfOut(cf_verbose, "", "Previous output is the same as current so do not mail it\n");
+        CfOut(OUTPUT_LEVEL_VERBOSE, "", "Previous output is the same as current so do not mail it\n");
         return;
     }
 
     if ((strlen(config->mail_server) == 0) || (strlen(config->mail_to_address) == 0))
     {
         /* Syslog should have done this */
-        CfOut(cf_verbose, "", "Empty mail server or address - skipping");
+        CfOut(OUTPUT_LEVEL_VERBOSE, "", "Empty mail server or address - skipping");
         return;
     }
 
@@ -441,7 +486,7 @@ static void MailResult(const ExecConfig *config, char *file)
 
     if ((fp = fopen(file, "r")) == NULL)
     {
-        CfOut(cf_inform, "fopen", "!! Couldn't open file %s", file);
+        CfOut(OUTPUT_LEVEL_INFORM, "fopen", "!! Couldn't open file %s", file);
         return;
     }
 
@@ -464,7 +509,7 @@ static void MailResult(const ExecConfig *config, char *file)
 
     if ((fp = fopen(file, "r")) == NULL)
     {
-        CfOut(cf_inform, "fopen", "Couldn't open file %s", file);
+        CfOut(OUTPUT_LEVEL_INFORM, "fopen", "Couldn't open file %s", file);
         return;
     }
 
@@ -480,7 +525,7 @@ static void MailResult(const ExecConfig *config, char *file)
 
     if ((server = getservbyname("smtp", "tcp")) == NULL)
     {
-        CfOut(cf_inform, "getservbyname", "Unable to lookup smtp service");
+        CfOut(OUTPUT_LEVEL_INFORM, "getservbyname", "Unable to lookup smtp service");
         fclose(fp);
         return;
     }
@@ -495,14 +540,14 @@ static void MailResult(const ExecConfig *config, char *file)
 
     if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
     {
-        CfOut(cf_inform, "socket", "Couldn't open a socket");
+        CfOut(OUTPUT_LEVEL_INFORM, "socket", "Couldn't open a socket");
         fclose(fp);
         return;
     }
 
     if (connect(sd, (void *) &raddr, sizeof(raddr)) == -1)
     {
-        CfOut(cf_inform, "connect", "Couldn't connect to host %s\n", config->mail_server);
+        CfOut(OUTPUT_LEVEL_INFORM, "connect", "Couldn't connect to host %s\n", config->mail_server);
         fclose(fp);
         cf_closesocket(sd);
         return;
@@ -629,7 +674,7 @@ static void MailResult(const ExecConfig *config, char *file)
 
     fclose(fp);
     cf_closesocket(sd);
-    CfOut(cf_log, "", "Cannot mail to %s.", config->mail_to_address);
+    CfOut(OUTPUT_LEVEL_LOG, "", "Cannot mail to %s.", config->mail_to_address);
 }
 
 static int Dialogue(int sd, char *s)

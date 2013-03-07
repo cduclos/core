@@ -27,16 +27,17 @@
 
 #include "vars.h"
 #include "attributes.h"
+#include "scope.h"
 
 /*****************************************************************************/
 
-void VerifyInterfacesPromise(Promise *pp)
+void VerifyInterfacesPromise(EvalContext *ctx, Promise *pp)
 {
     Attributes a = { {0} };
 
-    a = GetInterfacesAttributes(pp);
+    a = GetInterfacesAttributes(ctx, pp);
     VerifyInterface(a, pp);
-    DeleteScalar("this", "promiser");
+    ScopeDeleteScalar("this", "promiser");
 }
 
 /*****************************************************************************/

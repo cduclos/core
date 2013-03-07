@@ -64,7 +64,6 @@ bool IsStrCaseIn(const char *str, const char **strs);
 char **String2StringArray(char *str, char separator);
 void FreeStringArray(char **strs);
 
-int SubStrnCopyChr(char *to, const char *from, int len, char sep);
 int CountChar(const char *string, char sp);
 void ReplaceChar(char *in, char *out, int outSz, char from, char to);
 void ReplaceTrailingChar(char *str, char from, char to);
@@ -88,5 +87,13 @@ int StripTrailingNewline(char *str, size_t max_length);
  * @return 0 if successful, -1 if Chop was called on a string that seemed to have no terminator
  */
 int Chop(char *str, size_t max_length);
+
+/**
+ * @brief Check if a string ends with the given suffix
+ * @param str
+ * @param suffix
+ * @return True if suffix matches
+ */
+bool StringEndsWith(const char *str, const char *suffix);
 
 #endif

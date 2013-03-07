@@ -25,18 +25,13 @@
 #ifndef CFENGINE_FILES_NAMES_H
 #define CFENGINE_FILES_NAMES_H
 
-#include "platform.h"
+#include "cf3.defs.h"
 
-int IsNewerFileTree(char *dir, time_t reftime);
+int IsNewerFileTree(EvalContext *ctx, char *dir, time_t reftime);
 int CompareCSVName(const char *s1, const char *s2);
 int IsDir(char *path);
 char *JoinPath(char *path, const char *leaf);
 char *JoinSuffix(char *path, char *leaf);
-int JoinMargin(char *path, const char *leaf, char **nextFree, int bufsize, int margin);
-int StartJoin(char *path, char *leaf, int bufsize);
-int Join(char *path, const char *leaf, int bufsize);
-int JoinSilent(char *path, const char *leaf, int bufsize);
-int EndJoin(char *path, char *leaf, int bufsize);
 int IsAbsPath(char *path);
 void AddSlash(char *str);
 char *GetParentDirectoryCopy(const char *path);

@@ -89,9 +89,22 @@ static int IPV4_parser(const char *source, struct IPV4Address *address)
     int period_counter = 0;
     int port_counter = 0;
     int char_counter = 0;
-    int is_period = 0;
-    int is_digit = 0;
-    int is_port = 0;
+    bool is_period = 0;
+    bool is_digit = 0;
+    bool is_port = 0;
+
+    /*
+     * For simplicity sake we initialize address (if not NULL).
+     */
+    if (address)
+    {
+        int i = 0;
+        for (i = 0; i < 4; ++i)
+        {
+            address->octets[i] = 0;
+        }
+        address->port = 0;
+    }
 
     /*
      * IPV4 parsing has 6 states, of which:
@@ -114,7 +127,7 @@ static int IPV4_parser(const char *source, struct IPV4Address *address)
      *             d \| done
      */
     int state = 0;
-    int state_change = 0;
+    bool state_change = false;
     for (p = (char *)source; *p != '\0'; ++p)
     {
         /*
@@ -157,12 +170,12 @@ static int IPV4_parser(const char *source, struct IPV4Address *address)
                     address->octets[state] = octet;
                 }
                 state++;
-                state_change = 1;
+                state_change = true;
             }
             else
             {
                 state = 7;
-                state_change = 1;
+                state_change = true;
             }
             break;
         case 3:
@@ -181,12 +194,12 @@ static int IPV4_parser(const char *source, struct IPV4Address *address)
                     address->octets[state] = octet;
                 }
                 state = 5;
-                state_change = 1;
+                state_change = true;
             }
             else
             {
                 state = 7;
-                state_change = 1;
+                state_change = true;
             }
             break;
         case 4:
@@ -199,7 +212,7 @@ static int IPV4_parser(const char *source, struct IPV4Address *address)
             else
             {
                 state = 7;
-                state_change = 1;
+                state_change = true;
             }
             break;
         case 6:
@@ -242,10 +255,10 @@ static int IPV4_parser(const char *source, struct IPV4Address *address)
             port = 0;
             period_counter = 0;
             port_counter = 0;
-            is_period = 0;
-            is_digit = 0;
-            is_port = 0;
-            state_change = 0;
+            is_period = false;
+            is_digit = false;
+            is_port = false;
+            state_change = false;
         }
     }
     /*
@@ -338,19 +351,17 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
     int unsorted_pointer = 0;
     int bracket_expected = 0;
     int port = 0;
-    int colon_counter = 0;
-    int port_counter = 0;
     int char_counter = 0;
-    int is_start_bracket = 0;
-    int is_end_bracket = 0;
-    int is_colon = 0;
-    int is_hexdigit = 0;
-    int is_upper_hexdigit = 0;
-    int is_digit = 0;
+    bool is_start_bracket = 0;
+    bool is_end_bracket = 0;
+    bool is_colon = 0;
+    bool is_hexdigit = 0;
+    bool is_upper_hexdigit = 0;
+    bool is_digit = 0;
     int zero_compression = 0;
     int already_compressed = 0;
     int state = 0;
-    int state_change = 0;
+    bool state_change = false;
 
     /*
      * Initialize our container for unknown numbers.
@@ -408,7 +419,7 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                 else
                 {
                     state = 11;
-                    state_change = 1;
+                    state_change = true;
                 }
             }
             else if (is_hexdigit)
@@ -419,9 +430,12 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                 if (is_upper_hexdigit)
                 {
                     state = 11;
-                    state_change = 1;
+                    state_change = true;
                 }
-                sixteen = Char2Hex(sixteen, *p);
+                else
+                {
+                    sixteen = Char2Hex(sixteen, *p);
+                }
             }
             else if (is_colon)
             {
@@ -430,12 +444,12 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                     address->sixteen[0] = sixteen;
                 }
                 state = 1;
-                state_change = 1;
+                state_change = true;
             }
             else
             {
                 state = 11;
-                state_change = 1;
+                state_change = true;
             }
             break;
         case 1:
@@ -451,9 +465,12 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                 if (is_upper_hexdigit)
                 {
                     state = 11;
-                    state_change = 1;
+                    state_change = true;
                 }
-                sixteen = Char2Hex(sixteen, *p);
+                else
+                {
+                    sixteen = Char2Hex(sixteen, *p);
+                }
             }
             else if (is_colon)
             {
@@ -474,12 +491,12 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                     }
                 }
                 ++state;
-                state_change = 1;
+                state_change = true;
             }
             else
             {
                 state = 11;
-                state_change = 1;
+                state_change = true;
             }
             break;
         case 2:
@@ -495,9 +512,12 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                 if (is_upper_hexdigit)
                 {
                     state = 11;
-                    state_change = 1;
+                    state_change = true;
                 }
-                sixteen = Char2Hex(sixteen, *p);
+                else
+                {
+                    sixteen = Char2Hex(sixteen, *p);
+                }
             }
             else if (is_colon)
             {
@@ -509,7 +529,7 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                          * The '::' symbol can only occur once in a given address.
                          */
                         state = 11;
-                        state_change = 1;
+                        state_change = true;
                     }
                     else
                     {
@@ -544,7 +564,7 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                         }
                     }
                     ++state;
-                    state_change = 1;
+                    state_change = true;
                 }
             }
             else if (is_end_bracket)
@@ -560,7 +580,7 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                     unsorted_sixteen[unsorted_pointer] = sixteen;
                     ++unsorted_pointer;
                     state = 8;
-                    state_change = 1;
+                    state_change = true;
                 }
                 else
                 {
@@ -569,13 +589,13 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                      * Politely walk back and signal the error.
                      */
                     state = 11;
-                    state_change = 1;
+                    state_change = true;
                 }
             }
             else
             {
                 state = 11;
-                state_change = 1;
+                state_change = true;
             }
             break;
         case 7:
@@ -590,9 +610,12 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                 if (is_upper_hexdigit)
                 {
                     state = 11;
-                    state_change = 1;
+                    state_change = true;
                 }
-                sixteen = Char2Hex(sixteen, *p);
+                else
+                {
+                    sixteen = Char2Hex(sixteen, *p);
+                }
             }
             else if (is_end_bracket)
             {
@@ -607,7 +630,7 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                      * The last possible position for a sixteen is number 8.
                      */
                     ++state;
-                    state_change = 1;
+                    state_change = true;
                 }
                 else
                 {
@@ -616,25 +639,25 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                      * Politely walk back and signal the error.
                      */
                     state = 11;
-                    state_change = 1;
+                    state_change = true;
                 }
             }
             else
             {
                 state = 11;
-                state_change = 1;
+                state_change = true;
             }
             break;
         case 8:
             if (is_colon)
             {
                 ++state;
-                state_change = 1;
+                state_change = true;
             }
             else
             {
                 state = 11;
-                state_change = 1;
+                state_change = true;
             }
             break;
         case 9:
@@ -645,7 +668,7 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
             else
             {
                 state = 11;
-                state_change = 1;
+                state_change = true;
             }
             break;
         case 10:
@@ -668,16 +691,14 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
         {
             sixteen = 0;
             port = 0;
-            colon_counter = 0;
-            port_counter = 0;
             char_counter = 0;
-            is_start_bracket = 0;
-            is_end_bracket = 0;
-            is_colon = 0;
-            is_hexdigit = 0;
-            is_upper_hexdigit = 0;
+            is_start_bracket = false;
+            is_end_bracket = false;
+            is_colon = false;
+            is_hexdigit = false;
+            is_upper_hexdigit = false;
             is_digit = 0;
-            state_change = 0;
+            state_change = false;
         }
     }
     /*
@@ -726,7 +747,7 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                  * We know how many unsorted addresses we have from unsorted pointer,
                  * and we know that once zero_compression is activated we do not fill
                  * any more numbers to the address structure. Therefore the right way
-                 * to do this is to take the array of unsorted_sixteenand start assigning
+                 * to do this is to take the array of unsorted_sixteen and start assigning
                  * numbers backwards.
                  */
                 int i = 0;
@@ -791,7 +812,7 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
                  * We know how many unsorted addresses we have from unsorted pointer,
                  * and we know that once zero_compression is activated we do not fill
                  * any more numbers to the address structure. Therefore the right way
-                 * to do this is to take the array of unsorted_sixteenand start assigning
+                 * to do this is to take the array of unsorted_sixteen and start assigning
                  * numbers backwards.
                  */
                 int i = 0;
@@ -821,7 +842,7 @@ static int IPV6_parser(const char *source, struct IPV6Address *address)
             address->port = port;
         }
     }
-    if (state == 1)
+    if (state == 11)
     {
         /*
          * Error state
@@ -841,7 +862,6 @@ IPAddress *IPAddressNew(Buffer *source)
     const char *pad = BufferData(source);
     struct IPV4Address *ipv4 = NULL;
     struct IPV6Address *ipv6 = NULL;
-
     ipv4 = (struct IPV4Address *)xmalloc(sizeof(struct IPV4Address));
     ipv6 = (struct IPV6Address *)xmalloc(sizeof(struct IPV6Address));
 
@@ -849,14 +869,14 @@ IPAddress *IPAddressNew(Buffer *source)
     {
         free (ipv6);
         address = (IPAddress *)xmalloc(sizeof(IPAddress));
-        address->type = IPV4;
+        address->type = IP_ADDRESS_TYPE_IPV4;
         address->address = (void *)ipv4;
     }
     else if (IPV6_parser(pad, ipv6) == 0)
     {
         free (ipv4);
         address = (IPAddress *)xmalloc(sizeof(IPAddress));
-        address->type = IPV6;
+        address->type = IP_ADDRESS_TYPE_IPV6;
         address->address = (void *)ipv6;
     }
     else
@@ -893,37 +913,6 @@ int IPAddressType(IPAddress *address)
     return address->type;
 }
 
-void *IPAddressGet(IPAddress *address)
-{
-    if (!address)
-    {
-        return NULL;
-    }
-    void *value = NULL;
-    if (address->type == IPV4)
-    {
-        struct sockaddr_in *sa = NULL;
-        sa = (struct sockaddr_in *)xmalloc(sizeof(struct sockaddr_in));
-        sa->sin_family = AF_INET;
-        struct IPV4Address *ipv4 = (struct IPV4Address *)address->address;
-        sa->sin_port = htons(ipv4->port);
-#if BIG_ENDIAN
-        sa->sin_addr.s_addr = htonl((ipv4->octets[0] << 24) | (ipv4->octets[1] << 16) | (ipv4->octets[2] << 8) | (ipv4->octets[3]));
-#elif LITTLE_ENDIAN
-        sa->sin_addr.s_addr = htonl((ipv4->octets[3] << 24) | (ipv4->octets[2] << 16) | (ipv4->octets[1] << 8) | (ipv4->octets[0]));
-#endif
-        value = (void *)sa;
-    }
-    else if (address->type == IPV6)
-    {
-    }
-    else
-    {
-        value = NULL;
-    }
-    return value;
-}
-
 Buffer *IPAddressGetAddress(IPAddress *address)
 {
     if (!address)
@@ -933,7 +922,7 @@ Buffer *IPAddressGetAddress(IPAddress *address)
     Buffer *buffer = NULL;
     int result = 0;
 
-    if (address->type == IPV4)
+    if (address->type == IP_ADDRESS_TYPE_IPV4)
     {
         struct IPV4Address *ipv4 = (struct IPV4Address *)address->address;
         buffer = BufferNew();
@@ -943,7 +932,7 @@ Buffer *IPAddressGetAddress(IPAddress *address)
         result = BufferPrintf(buffer, "%u.%u.%u.%u", ipv4->octets[3], ipv4->octets[2], ipv4->octets[1], ipv4->octets[0]);
 #endif
     }
-    else if (address->type == IPV6)
+    else if (address->type == IP_ADDRESS_TYPE_IPV6)
     {
         struct IPV6Address *ipv6 = (struct IPV6Address *)address->address;
         buffer = BufferNew();
@@ -954,7 +943,6 @@ Buffer *IPAddressGetAddress(IPAddress *address)
         result = BufferPrintf(buffer, "%x:%x:%x:%x:%x:%x:%x:%x", ipv6->sixteen[7], ipv6->sixteen[6], ipv6->sixteen[5],
                               ipv6->sixteen[4], ipv6->sixteen[3], ipv6->sixteen[2], ipv6->sixteen[1], ipv6->sixteen[0]);
 #endif
-
     }
     else
     {
@@ -975,12 +963,12 @@ int IPAddressGetPort(IPAddress *address)
         return -1;
     }
     int port = -1;
-    if (address->type == IPV4)
+    if (address->type == IP_ADDRESS_TYPE_IPV4)
     {
         struct IPV4Address *ipv4 = (struct IPV4Address *)address->address;
         port = ipv4->port;
     }
-    else if (address->type == IPV6)
+    else if (address->type == IP_ADDRESS_TYPE_IPV6)
     {
         struct IPV6Address *ipv6 = (struct IPV6Address *)address->address;
         port = ipv6->port;

@@ -1,8 +1,6 @@
-#include <setjmp.h>
-#include <stdarg.h>
-#include <sys/types.h>
+#include "test.h"
+
 #include <string.h>
-#include "cmockery.h"
 #include "findhub.h"
 
 #include <avahi-client/client.h>
@@ -246,7 +244,8 @@ static void test_oneHubFound(void **state)
     assert_int_not_equal(list, NULL);
     
     ListIterator *i = NULL;
-    ListIteratorGet(list, &i);
+    i = ListIteratorGet(list);
+    assert_true(i != NULL);
     HostProperties *host = (HostProperties *)ListIteratorData(i);
     
     assert_int_equal(host->Port,5308);
@@ -267,7 +266,7 @@ static void test_multipleHubsFound(void **state)
     assert_int_not_equal(list, NULL);
     
     ListIterator *i = NULL;
-    ListIteratorGet(list, &i);
+    i = ListIteratorGet(list);
     
     HostProperties *host1 = (HostProperties *)ListIteratorData(i); 
     assert_int_not_equal(ListIteratorNext(i), -1);
@@ -302,7 +301,9 @@ static void test_errorOccurred(void **state)
 
 int main()
 {
-    const UnitTest tests[] = {
+    PRINT_TEST_BANNER();
+    const UnitTest tests[] =
+    {
           unit_test(test_noHubsFound),
           unit_test(test_oneHubFound),
           unit_test(test_multipleHubsFound),

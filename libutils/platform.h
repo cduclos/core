@@ -33,7 +33,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-# include "conf.h"
+# include <config.h>
 #endif
 
 #define _GNU_SOURCE 1
@@ -67,7 +67,7 @@
 #include <math.h>
 
 #ifndef _GETOPT_H
-# include "../pub/getopt.h"
+# include "../libcompat/getopt.h"
 #endif
 
 #ifdef HAVE_STDLIB_H

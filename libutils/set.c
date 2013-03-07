@@ -24,6 +24,11 @@
 
 #include "set.h"
 
+#include "alloc.h"
+#include "string_lib.h"
+#include "hashes.h"
+
+TYPED_SET_DEFINE(String, char *, (MapHashFn)&OatHash, (MapKeyEqualFn)&StringSafeEqual, &free)
 
 Set *SetNew(MapHashFn element_hash_fn,
             MapKeyEqualFn element_equal_fn,
@@ -66,4 +71,23 @@ void *SetIteratorNext(SetIterator *i)
 {
     MapKeyValue *kv = MapIteratorNext(i);
     return kv ? kv->key : NULL;
+}
+
+StringSet *StringSetFromString(const char *str, char delimiter)
+{
+    StringSet *set = StringSetNew();
+
+    char delimiters[2] = { 0 };
+    delimiters[0] = delimiter;
+
+    char *copy = xstrdup(str);
+    char *curr = strtok(copy, delimiters);
+    while (curr)
+    {
+        StringSetAdd(set, xstrdup(curr));
+        curr = strtok(NULL, delimiters);
+    }
+
+    free(copy);
+    return set;
 }

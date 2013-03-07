@@ -27,6 +27,8 @@
 #include "alloc.h"
 #include "array_map_priv.h"
 #include "hash_map_priv.h"
+#include "string_lib.h"
+#include "hashes.h"
 
 /*
  * This associative array implementation uses array with linear search up to
@@ -198,15 +200,18 @@ void MapClear(Map *map)
 
 void MapDestroy(Map *map)
 {
-    if (IsArrayMap(map))
+    if (map)
     {
-        ArrayMapDestroy(map->arraymap);
+        if (IsArrayMap(map))
+        {
+            ArrayMapDestroy(map->arraymap);
+        }
+        else
+        {
+            HashMapDestroy(map->hashmap);
+        }
+        free(map);
     }
-    else
-    {
-        HashMapDestroy(map->hashmap);
-    }
-    free(map);
 }
 
 /******************************************************************************/
@@ -238,3 +243,9 @@ MapKeyValue *MapIteratorNext(MapIterator *i)
         return HashMapIteratorNext(&i->hashmap_iter);
     }
 }
+
+TYPED_MAP_DEFINE(String, char *, char *,
+                 (MapHashFn)&OatHash,
+                 (MapKeyEqualFn)&StringSafeEqual,
+                 &free,
+                 &free)
