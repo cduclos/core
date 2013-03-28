@@ -72,7 +72,13 @@ static Rlist *IGNORE_INTERFACES = NULL;
 
 static bool IsProcessRunning(pid_t pid)
 {
-    int res = kill(pid, 0);
+    /*
+     * We need to freeze the process before killing it.
+     * Therefore we send a SIGSTOP to the process, if the
+     * pid exists, then we leave it there to avoid having a
+     * runaway process.
+     */
+    int res = kill(pid, SIGSTOP);
 
     if(res == 0)
     {
@@ -192,6 +198,10 @@ int Unix_GracefulTerminate(pid_t pid, char *procname)
     if (PIDMatchName(pid, procname))
     {
         kill(pid, SIGINT);
+        /*
+         * We need to wake up the process so it gets killed.
+         */
+        kill(pid, SIGCONT);
         sleep(1);
 
         if (PIDMatchName(pid, procname))
@@ -201,11 +211,13 @@ int Unix_GracefulTerminate(pid_t pid, char *procname)
             if (PIDMatchName(pid, procname))
             {
                 kill(pid, SIGTERM);
+                kill(pid, SIGCONT);
                 sleep(5);
 
                 if (PIDMatchName(pid, procname))
                 {
                     kill(pid, SIGKILL);
+                    kill(pid, SIGCONT);
                     sleep(1);
 
                     if (PIDMatchName(pid, procname))
@@ -227,6 +239,7 @@ int Unix_GracefulTerminatePID(pid_t pid)
     if (IsProcessRunning(pid))
     {
         kill(pid, SIGINT);
+        kill(pid, SIGCONT);
         sleep(1);
 
         if (IsProcessRunning(pid))
@@ -236,11 +249,13 @@ int Unix_GracefulTerminatePID(pid_t pid)
             if (IsProcessRunning(pid))
             {
                 kill(pid, SIGTERM);
+                kill(pid, SIGCONT);
                 sleep(5);
 
                 if (IsProcessRunning(pid))
                 {
                     kill(pid, SIGKILL);
+                    kill(pid, SIGCONT);
                     sleep(1);
 
                     if (IsProcessRunning(pid))
@@ -289,27 +304,6 @@ void ProcessSignalTerminate(pid_t pid)
     }
 
     sleep(1);
-}
-
-/*************************************************************/
-
-static bool IsProcessRunning(pid_t pid)
-{
-    int res = kill(pid, 0);
-
-    if(res == 0)
-    {
-        return true;
-    }
-
-    if(res == -1 && errno == ESRCH)
-    {
-        return false;
-    }
-
-    CfOut(cf_error, "kill", "!! Failed checking for process existence");
-
-    return false;
 }
 
 /*************************************************************/
