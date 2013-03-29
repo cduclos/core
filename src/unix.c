@@ -36,6 +36,7 @@
 #include "files_names.h"
 
 #include <assert.h>
+#include <errno.h>
 
 #ifdef HAVE_ZONE_H
 # include <zone.h>
@@ -74,13 +75,7 @@ static Rlist *IGNORE_INTERFACES = NULL;
 
 static bool IsProcessRunning(pid_t pid)
 {
-    /*
-     * We need to freeze the process before killing it.
-     * Therefore we send a SIGSTOP to the process, if the
-     * pid exists, then we leave it there to avoid having a
-     * runaway process.
-     */
-    int res = kill(pid, SIGSTOP);
+    int res = kill(pid, 0);
 
     if(res == 0)
     {
@@ -173,29 +168,135 @@ char *Unix_xbasename_len(char *path, int len)
 /* Try to gracefully terminate process with given PID and executable name. */
 int Unix_GracefulTerminate(pid_t pid, char *procname)
 {
+	int res = 0;
+	int last_error = 0;
+    res = kill(pid, SIGSTOP);
+    last_error = errno;
+    if (res < 0)
+    {
+        if (last_error = ESRCH)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
     if (PIDMatchName(pid, procname))
     {
-        kill(pid, SIGINT);
-        /*
-         * We need to wake up the process so it gets killed.
-         */
-        kill(pid, SIGCONT);
+        res = kill(pid, SIGINT);
+        last_error = errno;
+        if (res < 0)
+        {
+            if (last_error = ESRCH)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        /* We need to wake up the process so it gets killed. */
+        res = kill(pid, SIGCONT);
+        last_error = errno;
+        if (res < 0)
+        {
+            if (last_error = ESRCH)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
         sleep(1);
-
+		res = kill(pid, SIGSTOP);
+        last_error = errno;
+        if (res < 0)
+        {
+            if (last_error = ESRCH)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
         if (PIDMatchName(pid, procname))
         {
             /* If still running give it a bit more time to settle... */
             sleep(5);
             if (PIDMatchName(pid, procname))
             {
-                kill(pid, SIGTERM);
-                kill(pid, SIGCONT);
+                res = kill(pid, SIGTERM);
+		        last_error = errno;
+        		if (res < 0)
+        		{
+            		if (last_error = ESRCH)
+            		{
+                		return true;
+            		}
+            		else
+            		{	
+                		return false;
+            		}
+        		}
+                res = kill(pid, SIGCONT);
+                if (res < 0)
+                {
+                    if (last_error = ESRCH)
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
                 sleep(5);
 
+                res = kill(pid, SIGSTOP);
+                if (res < 0)
+                {
+                    if (last_error = ESRCH)
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
                 if (PIDMatchName(pid, procname))
                 {
-                    kill(pid, SIGKILL);
-                    kill(pid, SIGCONT);
+                    res = kill(pid, SIGKILL);
+	                if (res < 0)
+    	            {
+        	            if (last_error = ESRCH)
+            	        {
+                	        return true;
+                    	}
+                   	 	else
+                    	{
+                        	return false;
+                    	}
+                	}
+                    res = kill(pid, SIGCONT);
+                    if (res < 0)
+                    {
+                        if (last_error = ESRCH)
+                        {
+                            return true;
+                        }
+                        else  
+                        {
+                            return false;
+                        }
+                    }
                     sleep(1);
 
                     if (PIDMatchName(pid, procname))
@@ -206,38 +307,228 @@ int Unix_GracefulTerminate(pid_t pid, char *procname)
                         return false;
                     }
                 }
+                else
+				{
+                    res = kill(pid, SIGCONT);
+                    if (res < 0)
+                    {
+                        if (last_error = ESRCH)
+                        {
+                            return true;
+                        }
+                        else  
+                        {
+                            return false;
+                        }
+                    }
+				}
+            }
+            else
+			{
+                res = kill(pid, SIGCONT);
+   				if (res < 0)
+                {
+                    if (last_error = ESRCH)
+                    {
+                        return true;
+                    }
+                    else  
+                    {
+                        return false;
+                    }
+                }
+			}
+        }
+        else
+		{
+            res = kill(pid, SIGCONT);
+            if (res < 0)
+            {
+                if (last_error = ESRCH)
+                {
+                    return true;
+                }
+                else  
+                {
+                    return false;
+                }
+            }
+		}
+    }
+    else
+	{
+        res = kill(pid, SIGCONT);
+        if (res < 0)
+        {
+            if (last_error = ESRCH)
+            {
+                return true;
+            }
+            else  
+            {
+                return false;
             }
         }
-    }
+	}
     return true;
 }
 
 int Unix_GracefulTerminatePID(pid_t pid)
 {
+	int res = 0;
+	int last_error = 0;
+	res = kill(pid, SIGSTOP);
+	last_error = errno; 
+	if (res < 0)
+	{
+		/*
+		 * We failed to stop the process, there are two possible explanations:
+		 * a) The process does not exist -> We signal as successful.
+		 * b) We don't have enough permissions -> We signal as an error.
+		 */	
+		if (last_error = ESRCH)
+		{
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
     if (IsProcessRunning(pid))
     {
-        kill(pid, SIGINT);
-        kill(pid, SIGCONT);
+        res = kill(pid, SIGINT);
+		last_error = errno;
+		if (res < 0)
+		{
+			if (last_error = ESRCH)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
+		}
+        res = kill(pid, SIGCONT);
+        last_error = errno;
+        if (res < 0)
+        {
+            if (last_error = ESRCH)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
         sleep(1);
-
+		res = kill(pid, SIGSTOP);
+        last_error = errno;
+        if (res < 0)
+        {
+            if (last_error = ESRCH)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
         if (IsProcessRunning(pid))
         {
             /* If still running give it a bit more time to settle... */
             sleep(5);
             if (IsProcessRunning(pid))
             {
-                kill(pid, SIGTERM);
-                kill(pid, SIGCONT);
+                res = kill(pid, SIGTERM);
+		        last_error = errno;
+        		if (res < 0)
+        		{
+            		if (last_error = ESRCH)
+            		{
+                		return true;
+            		}
+            		else
+            		{
+                		return false;
+            		}
+        		}
+                res = kill(pid, SIGCONT);
+		        last_error = errno;
+        		if (res < 0)
+        		{	
+            		if (last_error = ESRCH)
+            		{
+                		return true;
+            		}
+            		else
+            		{
+                		return false;
+            		}
+        		}
                 sleep(5);
+				res = kill(pid, SIGSTOP);
+		        last_error = errno;
+        		if (res < 0)
+        		{
+            		if (last_error = ESRCH)
+            		{
+                		return true;
+            		}
+            		else
+            		{
+                		return false;
+            		}
+        		}
 
                 if (IsProcessRunning(pid))
                 {
-                    kill(pid, SIGKILL);
-                    kill(pid, SIGCONT);
+                    res = kill(pid, SIGKILL);
+			        last_error = errno;
+        			if (res < 0)
+        			{
+            			if (last_error = ESRCH)
+            			{
+                			return true;
+            			}
+            			else
+            			{
+                			return false;
+            			}
+        			}
+                    res = kill(pid, SIGCONT);
                     sleep(1);
-
+					res = kill(pid, SIGSTOP);
+        			last_error = errno;
+        			if (res < 0)
+        			{
+            			if (last_error = ESRCH)
+            			{
+                			return true;
+            			}
+            			else
+            			{
+                			return false;
+            			}
+			        }
                     if (IsProcessRunning(pid))
                     {
+                        res = kill(pid, SIGCONT);
+        				last_error = errno;
+        				if (res < 0)
+        				{
+            				if (last_error = ESRCH)
+            				{
+                				return true;
+            				}
+            				else
+            				{
+                				return false;
+            				}
+				        }
                         CfOut(cf_error, "",
                               "!! Could not kill pid %lu",
                               (uintmax_t) pid);
