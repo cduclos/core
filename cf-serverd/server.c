@@ -48,31 +48,6 @@
 # include "cf.nova.h"
 #endif
 
-typedef enum
-{
-    PROTOCOL_COMMAND_EXEC,
-    PROTOCOL_COMMAND_AUTH,
-    PROTOCOL_COMMAND_GET,
-    PROTOCOL_COMMAND_OPENDIR,
-    PROTOCOL_COMMAND_SYNC,
-    PROTOCOL_COMMAND_CONTEXTS,
-    PROTOCOL_COMMAND_MD5,
-    PROTOCOL_COMMAND_MD5_SECURE,
-    PROTOCOL_COMMAND_AUTH_CLEAR,
-    PROTOCOL_COMMAND_AUTH_SECURE,
-    PROTOCOL_COMMAND_SYNC_SECURE,
-    PROTOCOL_COMMAND_GET_SECURE,
-    PROTOCOL_COMMAND_VERSION,
-    PROTOCOL_COMMAND_OPENDIR_SECURE,
-    PROTOCOL_COMMAND_VAR,
-    PROTOCOL_COMMAND_VAR_SECURE,
-    PROTOCOL_COMMAND_CONTEXT,
-    PROTOCOL_COMMAND_CONTEXT_SECURE,
-    PROTOCOL_COMMAND_QUERY_SECURE,
-    PROTOCOL_COMMAND_CALL_ME_BACK,
-    PROTOCOL_COMMAND_BAD
-} ProtocolCommand;
-
 //******************************************************************
 // GLOBAL STATE
 //******************************************************************
@@ -105,7 +80,7 @@ static void *HandleConnection(ServerConnectionState *conn);
 static int BusyWithConnection(EvalContext *ctx, ServerConnectionState *conn);
 static int MatchClasses(EvalContext *ctx, ServerConnectionState *conn);
 static void DoExec(EvalContext *ctx, ServerConnectionState *conn, char *args);
-static ProtocolCommand GetCommand(char *str);
+ProtocolCommand GetCommand(char *str);
 static int VerifyConnection(ServerConnectionState *conn, char buf[CF_BUFSIZE]);
 static void RefuseAccess(ServerConnectionState *conn, int size, char *errmesg);
 static int AccessControl(EvalContext *ctx, const char *req_path, ServerConnectionState *conn, int encrypt);
@@ -137,7 +112,7 @@ static int OptionFound(char *args, char *pos, char *word);
 //******************************************************************/
 // LOCAL STATE
 //******************************************************************/
-
+#ifdef CFENGINE_USE_OLD_PARSER
 static const char *PROTOCOL[] =
 {
     "EXEC",
@@ -160,9 +135,10 @@ static const char *PROTOCOL[] =
     "SCONTEXT",
     "SQUERY",
     "SCALLBACK",
+    "STARTTLS",
     NULL
 };
-
+#endif
 static int TRIES = 0;
 
 /*******************************************************************/
@@ -993,6 +969,12 @@ static int BusyWithConnection(EvalContext *ctx, ServerConnectionState *conn)
         }
 
         break;
+    case PROTOCOL_COMMAND_STARTTLS:
+        /*
+         * In the future this will be accepted only as the first part of the connection.
+         * For now we will accept this regardless.
+         */
+        break;
 
     case PROTOCOL_COMMAND_CALL_ME_BACK:
 
@@ -1260,9 +1242,9 @@ static void DoExec(EvalContext *ctx, ServerConnectionState *conn, char *args)
 }
 
 /**************************************************************/
-
-static ProtocolCommand GetCommand(char *str)
+ProtocolCommand GetCommand(char *str)
 {
+#ifdef CFENGINE_USE_OLD_PARSER
     int i;
     for (i = 0; PROTOCOL[i] != NULL; i++)
     {
@@ -1273,6 +1255,226 @@ static ProtocolCommand GetCommand(char *str)
     }
 
     return -1;
+#else
+    /*
+     * We have a long line that needs to be tokenized.
+     * Once we have found the first word we can do something with it.
+     */
+    ProtocolCommand command = PROTOCOL_COMMAND_BAD;
+    int last_char = 0;
+    char current = str[0];
+    /*
+     * We resort to a simple way to do things. According to the first letter we select the proper path.
+     * This way most commands will be a very simple comparison.
+     * If we were going to rewrite this we then should have a proper tokenizer and then a proper evaluator.
+     * For now we use the simple solution.
+     */
+    if ('A' == current)
+    {
+        /*
+         * AUTH
+         */
+        if (('U' == str[1]) && ('T' == str[2]) && ('H' == str[3]))
+        {
+            command = PROTOCOL_COMMAND_AUTH;
+            last_char = 4;
+        }
+    }
+    else if ('C' == current)
+    {
+        /*
+         * CAUTH
+         * CLASSES
+         * CONTEXT
+         */
+        if (('A' == str[1]) && ('U' == str[2]) && ('T' == str[3]) && ('H' == str[4]))
+        {
+            command = PROTOCOL_COMMAND_AUTH_CLEAR;
+            last_char = 5;
+        }
+        else if (('L' == str[1]) && ('A' == str[2]) && ('S' == str[3]) && ('S' == str[4]) && ('E' == str[5]) && ('S' == str[6]))
+        {
+            command = PROTOCOL_COMMAND_CONTEXTS;
+            last_char = 7;
+        }
+        else if (('O' == str[1]) && ('N' == str[2]) && ('T' == str[3]) && ('E' == str[4]) && ('X' == str[5]) && ('T' == str[6]))
+        {
+            command = PROTOCOL_COMMAND_CONTEXT;
+            last_char = 7;
+        }
+    }
+    else if ('E' == current)
+    {
+        /*
+         * EXEC
+         */
+        if (('X' == str[1]) && ('E' == str[2]) && ('C' == str[3]))
+        {
+            command = PROTOCOL_COMMAND_EXEC;
+            last_char = 4;
+        }
+    }
+    else if ('G' == current)
+    {
+        /*
+         * GET
+         */
+        if (('E' == str[1]) && ('T' == str[2]))
+        {
+            command = PROTOCOL_COMMAND_GET;
+            last_char = 3;
+        }
+    }
+    else if ('M' == current)
+    {
+        /*
+         * MD5
+         */
+        if (('D' == str[1]) && ('5' == str[2]))
+        {
+            command = PROTOCOL_COMMAND_MD5;
+            last_char = 3;
+        }
+    }
+    else if ('O' == current)
+    {
+        /*
+         * OPENDIR
+         */
+        if (('P' == str[1]) && ('E' == str[2]) && ('N' == str[3]) && ('D' == str[4]) && ('I' == str[5]) && ('R' == str[6]))
+        {
+            command = PROTOCOL_COMMAND_OPENDIR;
+            last_char = 7;
+        }
+    }
+    else if ('S' == current)
+    {
+        /*
+         * The 'S' commands are the complicated ones. Several of them are the 'secure' version of the normal commands,
+         * while others are just commands.
+         *
+         * SAUTH
+         * SCALLBACK
+         * SCONTEXT
+         * SGET
+         * SMD5
+         * SOPENDIR
+         * SQUERY
+         * SSYNCH
+         * STARTTLS
+         * SYNCH
+         * SVAR
+         */
+        current = str[1];
+        if ('A' == current)
+        {
+            if (('U' == str[2]) && ('T' == str[3]) && ('H' == str[4]))
+            {
+                command = PROTOCOL_COMMAND_AUTH_SECURE;
+                last_char = 5;
+            }
+        }
+        else if ('C' == current)
+        {
+            if (('A' == str[2]) && ('L' == str[3]) && ('L' == str[4]) && ('B' == str[5]) && ('A' == str[6]) && ('C' == str[7]) && ('K' == str[8]))
+            {
+                command = PROTOCOL_COMMAND_CALL_ME_BACK;
+                last_char = 9;
+            }
+            else if (('O' == str[2]) && ('N' == str[3]) && ('T' == str[4]) && ('E' == str[5]) && ('X' == str[6]) && ('T' == str[7]))
+            {
+                command = PROTOCOL_COMMAND_CONTEXT_SECURE;
+                last_char = 8;
+            }
+        }
+        else if ('G' == current)
+        {
+            if (('E' == str[2]) && ('T' == str[3]))
+            {
+                command = PROTOCOL_COMMAND_GET_SECURE;
+                last_char = 4;
+            }
+        }
+        else if ('M' == current)
+        {
+            if (('D' == str[2]) && ('5' == str[3]))
+            {
+                command = PROTOCOL_COMMAND_MD5_SECURE;
+                last_char = 4;
+            }
+        }
+        else if ('O' == current)
+        {
+            if (('P' == str[2]) && ('E' == str[3]) && ('N' == str[4]) && ('D' == str[5]) && ('I' == str[6]) && ('R' == str[7]))
+            {
+                command = PROTOCOL_COMMAND_OPENDIR_SECURE;
+                last_char = 8;
+            }
+        }
+        else if ('Q' == current)
+        {
+            if (('U' == str[2]) && ('E' == str[3]) && ('R' == str[4]) && ('Y' == str[5]))
+            {
+                command = PROTOCOL_COMMAND_QUERY_SECURE;
+                last_char = 6;
+            }
+        }
+        else if ('S' == current)
+        {
+            if (('Y' == str[2]) && ('N' == str[3]) && ('C' == str[4]) && ('H' == str[5]))
+            {
+                command = PROTOCOL_COMMAND_SYNC_SECURE;
+                last_char = 6;
+            }
+        }
+        else if ('T' == current)
+        {
+            if (('A' == str[2]) && ('R' == str[3]) && ('T' == str[4]) && ('T' == str[5]) && ('L' == str[6]) && ('S' == str[7]))
+            {
+                command = PROTOCOL_COMMAND_STARTTLS;
+                last_char = 8;
+            }
+        }
+        else if ('Y' == current)
+        {
+            if (('N' == str[2]) && ('C' == str[3]) && ('H' == str[4]))
+            {
+                command = PROTOCOL_COMMAND_SYNC;
+                last_char = 5;
+            }
+        }
+        else if ('V' == current)
+        {
+            if (('A' == str[2]) && ('R' == str[3]))
+            {
+                command = PROTOCOL_COMMAND_VAR_SECURE;
+                last_char = 4;
+            }
+        }
+    }
+    else if ('V' == current)
+    {
+        /*
+         * VAR
+         * VERSION
+         */
+        if (('A' == str[1]) && ('R' == str[2]))
+        {
+            command = PROTOCOL_COMMAND_VAR;
+            last_char = 3;
+        }
+        else if (('E' == str[1]) && ('R' == str[2]) && ('S' == str[3]) && ('I' == str[4]) && ('O' == str[5]) && ('N' == str[6]))
+        {
+            command = PROTOCOL_COMMAND_VERSION;
+            last_char = 7;
+        }
+    }
+    if ((' ' != str[last_char]) && ('\0' != str[last_char]))
+    {
+        command = PROTOCOL_COMMAND_BAD;
+    }
+    return command;
+#endif // CFENGINE_USE_OLD_PARSER
 }
 
 /*********************************************************************/
