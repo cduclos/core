@@ -105,7 +105,7 @@ int SendTLS(SSL *ssl, const char *buffer, int length)
     return sent;
 }
 
-int ReadTLS(SSL *ssl, char *buffer, int length)
+int ReceiveTLS(SSL *ssl, char *buffer, int length)
 {
     if (!ssl || !buffer || (length < 0))
     {
