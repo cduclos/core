@@ -8,4 +8,5 @@ libcfnet_la_SOURCES = \
 	net.c net.h \
     communication.c communication.h \
 	client_protocol.c client_protocol.h cfnet.h\
-	client_code.c client_code.h
+	client_code.c client_code.h \
+	tls.c tls.h

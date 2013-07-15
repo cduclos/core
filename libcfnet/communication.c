@@ -37,6 +37,8 @@ AgentConnection *NewAgentConn(const char *server_name)
     conn->trust = false;
     conn->encryption_type = 'c';
     conn->this_server = xstrdup(server_name);
+    conn->type_of_connection = CFEngine_Classic;
+    conn->tls = NULL;
     return conn;
 };
 
@@ -49,6 +51,12 @@ void DeleteAgentConn(AgentConnection *conn)
         Stat *sps = sp;
         sp = sp->next;
         free(sps);
+    }
+    if (conn->tls)
+    {
+        /*
+         * Stop and delete the tls connection
+         */
     }
 
     free(conn->session_key);

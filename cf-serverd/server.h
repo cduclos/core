@@ -79,7 +79,8 @@ typedef struct
 typedef struct ServerConnectionState
 {
     EvalContext *ctx;
-
+    TLSInfo *tls;
+    ConnectionType type_of_connection;
     int id_verified;
     int rsa_auth;
     int synchronized;

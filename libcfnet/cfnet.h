@@ -59,6 +59,27 @@ typedef enum
     FILE_TYPE_SOCK
 } FileType;
 
+/*
+ * TLS support
+ */
+#define DEFAULT_TLS_TIMEOUT_SECONDS     5
+#define DEFAULT_TLS_TIMEOUT_USECONDS    0
+#define SET_DEFAULT_TLS_TIMEOUT(x) \
+    x.tv_sec = DEFAULT_TLS_TIMEOUT_SECONDS; \
+    x.tv_usec = DEFAULT_TLS_TIMEOUT_USECONDS
+#define DEFAULT_TLS_TRIES 5
+typedef struct {
+    SSL *ssl; // SSL structure
+    struct timeval tv; // Timeout for TLS operations
+    int tries; // Number of tries for TLS operations
+} TLSInfo;
+
+typedef enum {
+    CFEngine_Classic,
+    CFEngine_TLS,
+    CFEngine_Unsupported
+} ConnectionType;
+
 /* TODO Shouldn't this be in libutils? */
 typedef struct Stat_ Stat;
 struct Stat_
@@ -100,8 +121,9 @@ typedef struct
     short error;
     char *this_server;
     Stat *cache; /* Cache for network connection (READDIR result) */
+    TLSInfo *tls;
+    ConnectionType type_of_connection;
 } AgentConnection;
-
 
 /* misc.c */
 

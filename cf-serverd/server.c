@@ -44,6 +44,8 @@
 #include "cf-serverd-enterprise-stubs.h"
 #include "audit.h"
 
+#include <openssl/ssl.h>
+
 #ifdef HAVE_NOVA
 # include "cf.nova.h"
 #endif
@@ -108,6 +110,7 @@ static void DeleteConn(ServerConnectionState *conn);
 static int cfscanf(char *in, int len1, int len2, char *out1, char *out2, char *out3);
 static int AuthenticationDialogue(ServerConnectionState *conn, char *recvbuffer, int recvlen);
 static int OptionFound(char *args, char *pos, char *word);
+static int DoStartTLS(ServerConnectionState *connection);
 
 //******************************************************************/
 // LOCAL STATE
@@ -973,6 +976,8 @@ static int BusyWithConnection(EvalContext *ctx, ServerConnectionState *conn)
         /*
          * In the future this will be accepted only as the first part of the connection.
          * For now we will accept this regardless.
+         * After receiving a STARTTLS, the server sends "TLS_ACK" back. The server enters a loop waiting
+         * for the client to connect using TLS.
          */
         break;
 
@@ -3460,6 +3465,33 @@ static int CheckStoreKey(ServerConnectionState *conn, RSA *key)
     }
 }
 
+/*
+ * This function sends "ACK" to the client and then waits for the client to start the TLS connection.
+ */
+static int DoStartTLS(ServerConnectionState *connection)
+{
+    int result = 0;
+    char buffer[CF_BUFSIZE];
+    snprintf(buffer, CF_BUFSIZE, "ACK");
+
+    /*
+     * We prepare everything before sending the ACK
+     */
+    connection->tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
+    SSL_METHOD *meth = NULL;
+    meth = TLSv1_method();
+    result = SendTransaction(conn->sd_reply, buffer, 0, CF_DONE);
+    if (result == -1)
+    {
+        Log(LOG_LEVEL_ERR, "Unable to send transaction. (send: %s)", GetErrorStr());
+    }
+
+    /*
+     * Now we wait for the client to send us the TLS request.
+     */
+    return 0;
+}
+
 /***************************************************************/
 /* Toolkit/Class: conn                                         */
 /***************************************************************/
@@ -3478,6 +3510,8 @@ static ServerConnectionState *NewConn(EvalContext *ctx, int sd)
     conn = xmalloc(sizeof(ServerConnectionState));
 
     conn->ctx = ctx;
+    conn->tls = NULL;
+    conn->type_of_connection = CFEngine_Classic;
     conn->sd_reply = sd;
     conn->id_verified = false;
     conn->rsa_auth = false;
