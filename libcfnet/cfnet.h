@@ -26,7 +26,7 @@
 #define CFENGINE_CFNET_H
 
 #include "platform.h"
-
+#include <openssl/ssl.h>
 
 /* ************************************************ */
 /* The following were copied from cf3.defs.h and still exist there, TODO */
