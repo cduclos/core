@@ -11,4 +11,4 @@ libcfnet_la_SOURCES = \
 	client_code.c client_code.h \
 	tls.c tls.h
 
-libcfnet_la_LDFLAGS += -lssl
+libcfnet_la_LDFLAGS = -lssl
