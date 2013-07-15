@@ -3480,7 +3480,7 @@ static int DoStartTLS(ServerConnectionState *connection)
     connection->tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
     SSL_METHOD *meth = NULL;
     meth = TLSv1_method();
-    result = SendTransaction(conn->sd_reply, buffer, 0, CF_DONE);
+    result = SendTransaction(connection->sd_reply, buffer, 0, CF_DONE);
     if (result == -1)
     {
         Log(LOG_LEVEL_ERR, "Unable to send transaction. (send: %s)", GetErrorStr());
