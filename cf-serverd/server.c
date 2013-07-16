@@ -422,10 +422,14 @@ static void *HandleConnection(ServerConnectionState *conn)
 
 /*********************************************************************/
 
-static int BusyWithConnection(EvalContext *ctx, ServerConnectionState *conn)
-  /* This is the protocol section. Here we must   */
-  /* check that the incoming data are sensible    */
-  /* and extract the information from the message */
+/*
+ * We divide the protocol processing in two funcions:
+ * 1. CFEngine_Classic_Protocol
+ * 2. CFEngine_TLS_Protocol
+ * This is done in order to simplify the handling of them.
+ */
+
+static int CFEngine_Classic_Protocol(EvalContext *ctx, ServerConnectionState *conn)
 {
     time_t tloc, trem = 0;
     char recvbuffer[CF_BUFSIZE + CF_BUFEXT], sendbuffer[CF_BUFSIZE], check[CF_BUFSIZE];
@@ -979,6 +983,615 @@ static int BusyWithConnection(EvalContext *ctx, ServerConnectionState *conn)
          * After receiving a STARTTLS, the server sends "TLS_ACK" back. The server enters a loop waiting
          * for the client to connect using TLS.
          */
+        if (DoStartTLS(conn) < 0)
+        {
+            Log(LOG_LEVEL_INFO, "Could not start TLS session as requested by client");
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+        break;
+
+    case PROTOCOL_COMMAND_CALL_ME_BACK:
+
+        sscanf(recvbuffer, "SCALLBACK %u", &len);
+
+        if ((len >= sizeof(out)) || (received != (len + CF_PROTO_OFFSET)))
+        {
+            Log(LOG_LEVEL_INFO, "Decrypt error CALL_ME_BACK");
+            RefuseAccess(conn, 0, "decrypt error CALL_ME_BACK");
+            return true;
+        }
+
+        memcpy(out, recvbuffer + CF_PROTO_OFFSET, len);
+        plainlen = DecryptString(conn->encryption_type, out, recvbuffer, conn->session_key, len);
+
+        if (strncmp(recvbuffer, "CALL_ME_BACK collect_calls", strlen("CALL_ME_BACK collect_calls")) != 0)
+        {
+            Log(LOG_LEVEL_INFO, "CALL_ME_BACK protocol defect");
+            RefuseAccess(conn, 0, "decryption failure");
+            return false;
+        }
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        if (!LiteralAccessControl(ctx, recvbuffer, conn, true))
+        {
+            Log(LOG_LEVEL_INFO, "Query access failure");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (ReceiveCollectCall(conn))
+        {
+            return true;
+        }
+
+    case PROTOCOL_COMMAND_AUTH:
+    case PROTOCOL_COMMAND_CONTEXTS:
+    case PROTOCOL_COMMAND_BAD:
+        ProgrammingError("Unexpected protocol command");
+    }
+
+    sprintf(sendbuffer, "BAD: Request denied\n");
+    SendTransaction(conn->sd_reply, sendbuffer, 0, CF_DONE);
+    Log(LOG_LEVEL_INFO, "Closing connection, due to request: '%s'", recvbuffer);
+    return false;
+}
+
+static int CFEngine_TLS_Protocol(EvalContext *ctx, ServerConnectionState *conn)
+{
+    time_t tloc, trem = 0;
+    char recvbuffer[CF_BUFSIZE + CF_BUFEXT], sendbuffer[CF_BUFSIZE], check[CF_BUFSIZE];
+    char filename[CF_BUFSIZE], buffer[CF_BUFSIZE], args[CF_BUFSIZE], out[CF_BUFSIZE];
+    long time_no_see = 0;
+    unsigned int len = 0;
+    int drift, plainlen, received, encrypted = 0;
+    ServerFileGetState get_args;
+    Item *classes;
+
+    memset(recvbuffer, 0, CF_BUFSIZE + CF_BUFEXT);
+    memset(&get_args, 0, sizeof(get_args));
+
+    if ((received = ReceiveTransaction(conn->sd_reply, recvbuffer, NULL)) == -1)
+    {
+        return false;
+    }
+
+    if (strlen(recvbuffer) == 0)
+    {
+        Log(LOG_LEVEL_DEBUG, "Terminating NULL transmission!");
+        return false;
+    }
+
+    Log(LOG_LEVEL_DEBUG, "Received: [%s] on socket %d", recvbuffer, conn->sd_reply);
+
+    /* Don't process request if we're signalled to exit. */
+    if (IsPendingTermination())
+    {
+        return false;
+    }
+
+    switch (GetCommand(recvbuffer))
+    {
+    case PROTOCOL_COMMAND_EXEC:
+        memset(args, 0, CF_BUFSIZE);
+        sscanf(recvbuffer, "EXEC %255[^\n]", args);
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "Server refusal due to incorrect identity");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!AllowedUser(conn->username))
+        {
+            Log(LOG_LEVEL_INFO, "Server refusal due to non-allowed user");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!conn->rsa_auth)
+        {
+            Log(LOG_LEVEL_INFO, "Server refusal due to no RSA authentication");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!AccessControl(ctx, CommandArg0(CFRUNCOMMAND), conn, false))
+        {
+            Log(LOG_LEVEL_INFO, "Server refusal due to denied access to requested object");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!MatchClasses(ctx, conn))
+        {
+            Log(LOG_LEVEL_INFO, "Server refusal due to failed class/context match");
+            Terminate(conn->sd_reply);
+            return false;
+        }
+
+        DoExec(ctx, conn, args);
+        Terminate(conn->sd_reply);
+        return false;
+
+    case PROTOCOL_COMMAND_VERSION:
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+        }
+
+        snprintf(conn->output, CF_BUFSIZE, "OK: %s", Version());
+        SendTransaction(conn->sd_reply, conn->output, 0, CF_DONE);
+        return conn->id_verified;
+
+    case PROTOCOL_COMMAND_AUTH_CLEAR:
+
+        conn->id_verified = VerifyConnection(conn, (char *) (recvbuffer + strlen("CAUTH ")));
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+        }
+
+        return conn->id_verified;       /* are we finished yet ? */
+
+    case PROTOCOL_COMMAND_AUTH_SECURE:            /* This is where key agreement takes place */
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!AuthenticationDialogue(conn, recvbuffer, received))
+        {
+            Log(LOG_LEVEL_INFO, "Auth dialogue error");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        return true;
+
+    case PROTOCOL_COMMAND_GET:
+
+        memset(filename, 0, CF_BUFSIZE);
+        sscanf(recvbuffer, "GET %d %[^\n]", &(get_args.buf_size), filename);
+
+        if ((get_args.buf_size < 0) || (get_args.buf_size > CF_BUFSIZE))
+        {
+            Log(LOG_LEVEL_INFO, "GET buffer out of bounds");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!AccessControl(ctx, filename, conn, false))
+        {
+            Log(LOG_LEVEL_INFO, "Access denied to get object");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        memset(sendbuffer, 0, CF_BUFSIZE);
+
+        if (get_args.buf_size >= CF_BUFSIZE)
+        {
+            get_args.buf_size = 2048;
+        }
+
+        get_args.connect = conn;
+        get_args.encrypt = false;
+        get_args.replybuff = sendbuffer;
+        get_args.replyfile = filename;
+
+        CfGetFile(&get_args);
+
+        return true;
+
+    case PROTOCOL_COMMAND_GET_SECURE:
+
+        memset(buffer, 0, CF_BUFSIZE);
+        sscanf(recvbuffer, "SGET %u %d", &len, &(get_args.buf_size));
+
+        if (received != len + CF_PROTO_OFFSET)
+        {
+            Log(LOG_LEVEL_VERBOSE, "Protocol error SGET");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        plainlen = DecryptString(conn->encryption_type, recvbuffer + CF_PROTO_OFFSET, buffer, conn->session_key, len);
+
+        cfscanf(buffer, strlen("GET"), strlen("dummykey"), check, sendbuffer, filename);
+
+        if (strcmp(check, "GET") != 0)
+        {
+            Log(LOG_LEVEL_INFO, "SGET/GET problem");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        if ((get_args.buf_size < 0) || (get_args.buf_size > 8192))
+        {
+            Log(LOG_LEVEL_INFO, "SGET bounding error");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (get_args.buf_size >= CF_BUFSIZE)
+        {
+            get_args.buf_size = 2048;
+        }
+
+        Log(LOG_LEVEL_DEBUG, "Confirm decryption, and thus validity of caller");
+        Log(LOG_LEVEL_DEBUG, "SGET '%s' with blocksize %d", filename, get_args.buf_size);
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!AccessControl(ctx, filename, conn, true))
+        {
+            Log(LOG_LEVEL_INFO, "Access control error");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        memset(sendbuffer, 0, CF_BUFSIZE);
+
+        get_args.connect = conn;
+        get_args.encrypt = true;
+        get_args.replybuff = sendbuffer;
+        get_args.replyfile = filename;
+
+        CfEncryptGetFile(&get_args);
+        return true;
+
+    case PROTOCOL_COMMAND_OPENDIR_SECURE:
+
+        memset(buffer, 0, CF_BUFSIZE);
+        sscanf(recvbuffer, "SOPENDIR %u", &len);
+
+        if ((len >= sizeof(out)) || (received != (len + CF_PROTO_OFFSET)))
+        {
+            Log(LOG_LEVEL_VERBOSE, "Protocol error OPENDIR: %d", len);
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (conn->session_key == NULL)
+        {
+            Log(LOG_LEVEL_INFO, "No session key");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        memcpy(out, recvbuffer + CF_PROTO_OFFSET, len);
+
+        plainlen = DecryptString(conn->encryption_type, out, recvbuffer, conn->session_key, len);
+
+        if (strncmp(recvbuffer, "OPENDIR", 7) != 0)
+        {
+            Log(LOG_LEVEL_INFO, "Opendir failed to decrypt");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        memset(filename, 0, CF_BUFSIZE);
+        sscanf(recvbuffer, "OPENDIR %[^\n]", filename);
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!AccessControl(ctx, filename, conn, true))        /* opendir don't care about privacy */
+        {
+            Log(LOG_LEVEL_INFO, "Access error");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        CfSecOpenDirectory(conn, sendbuffer, filename);
+        return true;
+
+    case PROTOCOL_COMMAND_OPENDIR:
+
+        memset(filename, 0, CF_BUFSIZE);
+        sscanf(recvbuffer, "OPENDIR %[^\n]", filename);
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (!AccessControl(ctx, filename, conn, true))        /* opendir don't care about privacy */
+        {
+            Log(LOG_LEVEL_INFO, "DIR access error");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        CfOpenDirectory(conn, sendbuffer, filename);
+        return true;
+
+    case PROTOCOL_COMMAND_SYNC_SECURE:
+
+        memset(buffer, 0, CF_BUFSIZE);
+        sscanf(recvbuffer, "SSYNCH %u", &len);
+
+        if ((len >= sizeof(out)) || (received != (len + CF_PROTO_OFFSET)))
+        {
+            Log(LOG_LEVEL_VERBOSE, "Protocol error SSYNCH: %d", len);
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (conn->session_key == NULL)
+        {
+            Log(LOG_LEVEL_INFO, "Bad session key");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        memcpy(out, recvbuffer + CF_PROTO_OFFSET, len);
+
+        plainlen = DecryptString(conn->encryption_type, out, recvbuffer, conn->session_key, len);
+
+        if (plainlen < 0)
+        {
+            DebugBinOut((char *) conn->session_key, 32, "Session key");
+            Log(LOG_LEVEL_ERR, "Bad decrypt (%d)", len);
+        }
+
+        if (strncmp(recvbuffer, "SYNCH", 5) != 0)
+        {
+            Log(LOG_LEVEL_INFO, "No synch");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        /* roll through, no break */
+
+    case PROTOCOL_COMMAND_SYNC:
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        memset(filename, 0, CF_BUFSIZE);
+        sscanf(recvbuffer, "SYNCH %ld STAT %[^\n]", &time_no_see, filename);
+
+        trem = (time_t) time_no_see;
+
+        if ((time_no_see == 0) || (filename[0] == '\0'))
+        {
+            break;
+        }
+
+        if ((tloc = time((time_t *) NULL)) == -1)
+        {
+            sprintf(conn->output, "Couldn't read system clock\n");
+            Log(LOG_LEVEL_INFO, "Couldn't read system clock. (time: %s)", GetErrorStr());
+            SendTransaction(conn->sd_reply, "BAD: clocks out of synch", 0, CF_DONE);
+            return true;
+        }
+
+        drift = (int) (tloc - trem);
+
+        if (!AccessControl(ctx, filename, conn, true))
+        {
+            Log(LOG_LEVEL_INFO, "Access control in sync");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        if (DENYBADCLOCKS && (drift * drift > CLOCK_DRIFT * CLOCK_DRIFT))
+        {
+            snprintf(conn->output, CF_BUFSIZE - 1, "BAD: Clocks are too far unsynchronized %ld/%ld\n", (long) tloc,
+                     (long) trem);
+            SendTransaction(conn->sd_reply, conn->output, 0, CF_DONE);
+            return true;
+        }
+        else
+        {
+            Log(LOG_LEVEL_DEBUG, "Clocks were off by %ld", (long) tloc - (long) trem);
+            StatFile(conn, sendbuffer, filename);
+        }
+
+        return true;
+
+    case PROTOCOL_COMMAND_MD5_SECURE:
+
+        sscanf(recvbuffer, "SMD5 %u", &len);
+
+        if ((len >= sizeof(out)) || (received != (len + CF_PROTO_OFFSET)))
+        {
+            Log(LOG_LEVEL_INFO, "Decryption error");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        memcpy(out, recvbuffer + CF_PROTO_OFFSET, len);
+        plainlen = DecryptString(conn->encryption_type, out, recvbuffer, conn->session_key, len);
+
+        if (strncmp(recvbuffer, "MD5", 3) != 0)
+        {
+            Log(LOG_LEVEL_INFO, "MD5 protocol error");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        /* roll through, no break */
+
+    case PROTOCOL_COMMAND_MD5:
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        CompareLocalHash(conn, sendbuffer, recvbuffer);
+        return true;
+
+    case PROTOCOL_COMMAND_VAR_SECURE:
+
+        sscanf(recvbuffer, "SVAR %u", &len);
+
+        if ((len >= sizeof(out)) || (received != (len + CF_PROTO_OFFSET)))
+        {
+            Log(LOG_LEVEL_INFO, "Decrypt error SVAR");
+            RefuseAccess(conn, 0, "decrypt error SVAR");
+            return true;
+        }
+
+        memcpy(out, recvbuffer + CF_PROTO_OFFSET, len);
+        plainlen = DecryptString(conn->encryption_type, out, recvbuffer, conn->session_key, len);
+        encrypted = true;
+
+        if (strncmp(recvbuffer, "VAR", 3) != 0)
+        {
+            Log(LOG_LEVEL_INFO, "VAR protocol defect");
+            RefuseAccess(conn, 0, "decryption failure");
+            return false;
+        }
+
+        /* roll through, no break */
+
+    case PROTOCOL_COMMAND_VAR:
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        if (!LiteralAccessControl(ctx, recvbuffer, conn, encrypted))
+        {
+            Log(LOG_LEVEL_INFO, "Literal access failure");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        GetServerLiteral(ctx, conn, sendbuffer, recvbuffer, encrypted);
+        return true;
+
+    case PROTOCOL_COMMAND_CONTEXT_SECURE:
+
+        sscanf(recvbuffer, "SCONTEXT %u", &len);
+
+        if ((len >= sizeof(out)) || (received != (len + CF_PROTO_OFFSET)))
+        {
+            Log(LOG_LEVEL_INFO, "Decrypt error SCONTEXT, len,received = %d,%d", len, received);
+            RefuseAccess(conn, 0, "decrypt error SCONTEXT");
+            return true;
+        }
+
+        memcpy(out, recvbuffer + CF_PROTO_OFFSET, len);
+        plainlen = DecryptString(conn->encryption_type, out, recvbuffer, conn->session_key, len);
+        encrypted = true;
+
+        if (strncmp(recvbuffer, "CONTEXT", 7) != 0)
+        {
+            Log(LOG_LEVEL_INFO, "CONTEXT protocol defect...");
+            RefuseAccess(conn, 0, "Decryption failed?");
+            return false;
+        }
+
+        /* roll through, no break */
+
+    case PROTOCOL_COMMAND_CONTEXT:
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, "Context probe");
+            return true;
+        }
+
+        if ((classes = ContextAccessControl(ctx, recvbuffer, conn, encrypted)) == NULL)
+        {
+            Log(LOG_LEVEL_INFO, "Context access failure on %s", recvbuffer);
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        ReplyServerContext(conn, encrypted, classes);
+        return true;
+
+    case PROTOCOL_COMMAND_QUERY_SECURE:
+
+        sscanf(recvbuffer, "SQUERY %u", &len);
+
+        if ((len >= sizeof(out)) || (received != (len + CF_PROTO_OFFSET)))
+        {
+            Log(LOG_LEVEL_INFO, "Decrypt error SQUERY");
+            RefuseAccess(conn, 0, "decrypt error SQUERY");
+            return true;
+        }
+
+        memcpy(out, recvbuffer + CF_PROTO_OFFSET, len);
+        plainlen = DecryptString(conn->encryption_type, out, recvbuffer, conn->session_key, len);
+
+        if (strncmp(recvbuffer, "QUERY", 5) != 0)
+        {
+            Log(LOG_LEVEL_INFO, "QUERY protocol defect");
+            RefuseAccess(conn, 0, "decryption failure");
+            return false;
+        }
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        if (!LiteralAccessControl(ctx, recvbuffer, conn, true))
+        {
+            Log(LOG_LEVEL_INFO, "Query access failure");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (GetServerQuery(conn, recvbuffer))
+        {
+            return true;
+        }
+
         break;
 
     case PROTOCOL_COMMAND_CALL_ME_BACK:
@@ -1027,6 +1640,29 @@ static int BusyWithConnection(EvalContext *ctx, ServerConnectionState *conn)
     sprintf(sendbuffer, "BAD: Request denied\n");
     SendTransaction(conn->sd_reply, sendbuffer, 0, CF_DONE);
     Log(LOG_LEVEL_INFO, "Closing connection, due to request: '%s'", recvbuffer);
+    return false;
+    return 0;
+}
+
+static int BusyWithConnection(EvalContext *ctx, ServerConnectionState *conn)
+  /* This is the protocol section. Here we must   */
+  /* check that the incoming data are sensible    */
+  /* and extract the information from the message */
+{
+    if (CFEngine_Classic == conn->type_of_connection)
+    {
+        return CFEngine_Classic_Protocol(ctx, conn);
+    }
+    /*
+     * The reason we don't have an else clause it is because
+     * we can change from Classic to TLS, therefore if we ask
+     * for the type of connection after we are done with the
+     * classic connection we avoid a more complicated logic.
+     */
+    if (CFEngine_TLS == conn->type_of_connection)
+    {
+        return CFEngine_TLS_Protocol(ctx, conn);
+    }
     return false;
 }
 
@@ -3478,8 +4114,31 @@ static int DoStartTLS(ServerConnectionState *connection)
      * We prepare everything before sending the ACK
      */
     connection->tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
-    SSL_METHOD *meth = NULL;
-    meth = TLSv1_method();
+    connection->tls->method = TLSv1_server_method();
+    connection->tls->context = SSL_CTX_new(connection->tls->method);
+
+    if (!connection->tls->context)
+    {
+        Log(LOG_LEVEL_INFO, "Unable to create the SSL context");
+        free (connection->tls);
+        return -1;
+    }
+
+    connection->tls->ssl = SSL_new(connection->tls->context);
+
+    if (!connection->tls->ssl)
+    {
+        Log(LOG_LEVEL_INFO, "Unable to create the SSL object");
+        SSL_CTX_free (connection->tls->context);
+        free (connection->tls);
+        return -1;
+    }
+
+    SSL_set_fd(connection->tls->ssl, connection->sd_reply);
+
+    /*
+     * Now we are ready to tell the client to try the TLS initialization.
+     */
     result = SendTransaction(connection->sd_reply, buffer, 0, CF_DONE);
     if (result == -1)
     {
@@ -3489,6 +4148,71 @@ static int DoStartTLS(ServerConnectionState *connection)
     /*
      * Now we wait for the client to send us the TLS request.
      */
+    int result = 0;
+    int total_tries = 0;
+    do {
+        result = SSL_accept(connection->tls->ssl);
+        if (result <= 0)
+        {
+            /*
+             * Identify the problem and if possible try to fix it.
+             */
+            int error = SSL_get_error(connection->tls->ssl, result);
+            if ((SSL_ERROR_WANT_WRITE == error) || (SSL_ERROR_WANT_READ == error))
+            {
+                Log(LOG_LEVEL_DEBUG, "Recoverable error in TLS handshake, trying to fix it");
+                /*
+                 * We can try to fix this.
+                 * This error means that there was not enough data in the buffer, using select
+                 * to wait until we get more data.
+                 */
+                fd_set rfds;
+                struct timeval tv;
+                int tries = 0;
+
+                do {
+                    SET_DEFAULT_TLS_TIMEOUT(tv);
+                    FD_ZERO(&rfds);
+                    FD_SET(connection->sd_reply, &rfds);
+
+                    result = select(connection->sd_reply+1, &rfds, NULL, NULL, &tv);
+                    if (result > 0)
+                    {
+                        /*
+                         * Ready to receive data
+                         */
+                        break;
+                    }
+                    else
+                    {
+                        Log(LOG_LEVEL_DEBUG, "select(2) timed out, retrying (tries: %d)", tries);
+                        ++tries;
+                    }
+                } while (tries <= DEFAULT_TLS_TRIES);
+            }
+            else
+            {
+                /*
+                 * Unrecoverable error
+                 */
+                Log(LOG_LEVEL_DEBUG, "Unrecoverable error in TLS handshake (error: %d)", error);
+                SSL_free (connection->tls->ssl);
+                SSL_CTX_free (connection->tls->context);
+                free (connection->tls);
+                return -1;
+            }
+        }
+        else
+        {
+            /*
+             * TLS channel established, start talking!
+             */
+            Log (LOG_LEVEL_INFO, "TLS connection established");
+            connection->type_of_connection = CFEngine_TLS;
+            break;
+        }
+        ++total_tries;
+    } while (total_tries <= DEFAULT_TLS_TRIES);
     return 0;
 }
 

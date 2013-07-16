@@ -111,10 +111,6 @@ int ReceiveTLS(SSL *ssl, char *buffer, int length)
     {
         return -1;
     }
-    /*
-     * Reading less bytes than requested is not an error. It might be that we
-     * tried to read more bytes than what is actually available.
-     */
     int total_tries = 0;
     int received = 0;
     do {
@@ -179,5 +175,6 @@ int ReceiveTLS(SSL *ssl, char *buffer, int length)
         }
         ++total_tries;
     } while (total_tries <= DEFAULT_TLS_TRIES);
+    buffer[received] = '\0';
     return received;
 }

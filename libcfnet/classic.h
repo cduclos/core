@@ -22,17 +22,10 @@
   included file COSL.txt.
 */
 
-/* Low Level networking routines. */
+#ifndef CLASSIC_H
+#define CLASSIC_H
 
-#ifndef CFENGINE_NET_H
-#define CFENGINE_NET_H
+int RecvSocketStream(int sd, char *buffer, int toget);
+int SendSocketStream(int sd, char *buffer, int toget, int flags);
 
-#include "cfnet.h"
-
-
-int SendTransaction(int sd, char *buffer, int len, char status);
-int ReceiveTransaction(int sd, char *buffer, int *more);
-
-int SetReceiveTimeout(int sd, const struct timeval *timeout);
-
-#endif
+#endif // CLASSIC_H

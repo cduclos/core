@@ -70,6 +70,8 @@ typedef enum
 #define DEFAULT_TLS_TRIES 5
 typedef struct {
     SSL *ssl; // SSL structure
+    SSL_CTX *context; // SSL Context
+    SSL_METHOD *method; // SSL Method
     struct timeval tv; // Timeout for TLS operations
     int tries; // Number of tries for TLS operations
 } TLSInfo;
