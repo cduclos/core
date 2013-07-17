@@ -27,6 +27,25 @@
 #include "logging.h"
 #include "misc_lib.h"
 
+static bool LastRecvTimedOut(void)
+{
+#ifndef __MINGW32__
+    if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
+    {
+        return true;
+    }
+#else
+    int lasterror = GetLastError();
+
+    if (lasterror == EAGAIN || lasterror == WSAEWOULDBLOCK)
+    {
+        return true;
+    }
+#endif
+
+    return false;
+}
+
 int RecvSocketStream(int sd, char buffer[CF_BUFSIZE], int toget)
 {
     int already, got;

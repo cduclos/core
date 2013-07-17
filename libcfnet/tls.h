@@ -53,7 +53,7 @@ int SendTLS(SSL *ssl, const char *buffer, int length);
   @param length Length of the data to receive.
   @return The length of the received data, which could be smaller than the requested or -1 in case of error.
   */
-int ReceiveTLS(SSL *ssl, char *buffer, int *length);
+int ReceiveTLS(SSL *ssl, char *buffer, int length);
 
 #endif // CFENGINE_TLS_H
 

@@ -82,6 +82,14 @@ typedef enum {
     CFEngine_Unsupported
 } ConnectionType;
 
+typedef struct {
+    ConnectionType type;
+    union physical_ {
+        int sd;
+        TLSInfo *tls;
+    } physical;
+} ConnectionInfo;
+
 /* TODO Shouldn't this be in libutils? */
 typedef struct Stat_ Stat;
 struct Stat_
@@ -108,7 +116,7 @@ struct Stat_
 
 typedef struct
 {
-    int sd;
+    ConnectionInfo connection;
     int trust;                  /* true if key being accepted on trust */
     int authenticated;
     int protoversion;
@@ -123,8 +131,6 @@ typedef struct
     short error;
     char *this_server;
     Stat *cache; /* Cache for network connection (READDIR result) */
-    TLSInfo *tls;
-    ConnectionType type_of_connection;
 } AgentConnection;
 
 /* misc.c */

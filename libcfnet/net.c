@@ -31,26 +31,7 @@
 
 /*************************************************************************/
 
-static bool LastRecvTimedOut(void)
-{
-#ifndef __MINGW32__
-	if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
-	{
-		return true;
-	}
-#else
-	int lasterror = GetLastError();
-
-	if (lasterror == EAGAIN || lasterror == WSAEWOULDBLOCK)
-	{
-		return true;
-	}
-#endif
-
-	return false;
-}
-
-int SendTransaction(int sd, char *buffer, int len, char status)
+int SendTransaction(ConnectionInfo *connection, char *buffer, int len, char status)
 {
     char work[CF_BUFSIZE];
     int wlen;
@@ -76,7 +57,21 @@ int SendTransaction(int sd, char *buffer, int len, char status)
 
     memcpy(work + CF_INBAND_OFFSET, buffer, wlen);
 
-    if (SendSocketStream(sd, work, wlen + CF_INBAND_OFFSET, 0) == -1)
+    if (CFEngine_Classic == connection->type)
+    {
+        if (SendSocketStream(connection->physical.sd, work, wlen + CF_INBAND_OFFSET, 0) == -1)
+        {
+            return -1;
+        }
+    }
+    else if (CFEngine_TLS == connection->type)
+    {
+        if (SendTLS(connection->physical.tls, work, wlen + CF_INBAND_OFFSET) == -1)
+        {
+            return -1;
+        }
+    }
+    else
     {
         return -1;
     }
@@ -86,15 +81,30 @@ int SendTransaction(int sd, char *buffer, int len, char status)
 
 /*************************************************************************/
 
-int ReceiveTransaction(int sd, char *buffer, int *more)
+int ReceiveTransaction(ConnectionInfo *connection, char *buffer, int *more)
 {
     char proto[CF_INBAND_OFFSET + 1];
     char status = 'x';
     unsigned int len = 0;
+    int result = 0;
 
     memset(proto, 0, CF_INBAND_OFFSET + 1);
 
-    if (RecvSocketStream(sd, proto, CF_INBAND_OFFSET) == -1) /* Get control channel */
+    if (CFEngine_Classic == connection->type)
+    {
+        if (RecvSocketStream(connection->physical.sd, proto, CF_INBAND_OFFSET) == -1) /* Get control channel */
+        {
+            return -1;
+        }
+    }
+    else if (CFEngine_TLS == connection->type)
+    {
+        if (ReceiveTLS(connection->physical.tls, proto, CF_INBAND_OFFSET) == -1)
+        {
+            return -1;
+        }
+    }
+    else
     {
         return -1;
     }
@@ -124,7 +134,20 @@ int ReceiveTransaction(int sd, char *buffer, int *more)
         }
     }
 
-    return RecvSocketStream(sd, buffer, len);
+    if (CFEngine_Classic == connection->type)
+    {
+        result = RecvSocketStream(connection->physical.sd, buffer, len);
+    }
+    else if (CFEngine_TLS == connection->type)
+    {
+        result = ReceiveTLS(connection->physical.tls, buffer, len);
+    }
+    else
+    {
+        return -1;
+    }
+
+    return result;
 }
 
 /*************************************************************************/
