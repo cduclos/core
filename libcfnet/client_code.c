@@ -259,7 +259,7 @@ static AgentConnection *ServerConnection(const char *server, FileCopy fc, int *e
             return NULL;
         }
 
-        if (!IdentifyAgent(conn->connection.physical.sd))
+        if (!IdentifyAgent(&conn->connection))
         {
             Log(LOG_LEVEL_ERR, "Id-authentication for '%s' failed", VFQNAME);
             errno = EPERM;
@@ -290,11 +290,17 @@ void DisconnectServer(AgentConnection *conn)
 {
     if (conn)
     {
-        if (conn->connection.physical.sd >= 0)                        /* Not INVALID or OFFLINE */
+        if (CFEngine_Classic == conn->connection.type)
         {
-            cf_closesocket(conn->connection.physical.sd);
-            conn->sd = SOCKET_INVALID;
+            if (conn->connection.physical.sd >= 0)                        /* Not INVALID or OFFLINE */
+            {
+                cf_closesocket(conn->connection.physical.sd);
+                conn->sd = SOCKET_INVALID;
+            }
         }
+        /*
+         * We need to handle the shutdown of the TLS connection.
+         */
         DeleteAgentConn(conn);
     }
 }
