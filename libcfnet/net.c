@@ -66,7 +66,7 @@ int SendTransaction(ConnectionInfo *connection, char *buffer, int len, char stat
     }
     else if (CFEngine_TLS == connection->type)
     {
-        if (SendTLS(connection->physical.tls, work, wlen + CF_INBAND_OFFSET) == -1)
+        if (SendTLS(connection->physical.tls->ssl, work, wlen + CF_INBAND_OFFSET) == -1)
         {
             return -1;
         }
@@ -99,7 +99,7 @@ int ReceiveTransaction(ConnectionInfo *connection, char *buffer, int *more)
     }
     else if (CFEngine_TLS == connection->type)
     {
-        if (ReceiveTLS(connection->physical.tls, proto, CF_INBAND_OFFSET) == -1)
+        if (ReceiveTLS(connection->physical.tls->ssl, proto, CF_INBAND_OFFSET) == -1)
         {
             return -1;
         }

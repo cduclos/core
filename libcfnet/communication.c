@@ -32,13 +32,12 @@ AgentConnection *NewAgentConn(const char *server_name)
 {
     AgentConnection *conn = xcalloc(1, sizeof(AgentConnection));
 
-    conn->sd = SOCKET_INVALID;
+    conn->connection.type = CFEngine_Classic;
+    conn->connection.physical.sd = SOCKET_INVALID;
     conn->family = AF_INET;
     conn->trust = false;
     conn->encryption_type = 'c';
     conn->this_server = xstrdup(server_name);
-    conn->type_of_connection = CFEngine_Classic;
-    conn->tls = NULL;
     return conn;
 };
 
@@ -52,13 +51,16 @@ void DeleteAgentConn(AgentConnection *conn)
         sp = sp->next;
         free(sps);
     }
-    if (conn->tls)
+
+    if (CFEngine_TLS == conn->connection.type)
     {
         /*
-         * Stop and delete the tls connection
+         * Shut down the TLS connection
          */
+        SSL_shutdown(conn->connection.physical.tls);
+        SSL_CTX_free(conn->connection.physical.tls->context);
+        free ()
     }
-
     free(conn->session_key);
     free(conn->this_server);
     free(conn);

@@ -36,7 +36,14 @@
 
 int ClientStartTLS();
 int ClientStopTLS();
-int ServerStartTLS();
+/**
+  @brief Start a TLS session with the server.
+
+  If this routine fails, the underlying classic connection will be closed.
+  @param connection ConnectionInfo structure
+  @return 0 if the connection was established and -1 in case of error.
+  */
+int ServerStartTLS(ConnectionInfo *connection);
 int ServerStopTLS();
 /**
   @brief Sends the data stored on the buffer using a TLS session.

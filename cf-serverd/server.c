@@ -102,8 +102,8 @@ static void Terminate(ConnectionInfo *connection);
 static int AllowedUser(char *user);
 static int AuthorizeRoles(EvalContext *ctx, ServerConnectionState *conn, char *args);
 static int TransferRights(char *filename, ServerFileGetState *args, struct stat *sb);
-static void AbortTransfer(int sd, char *filename);
-static void FailedTransfer(int sd);
+static void AbortTransfer(ConnectionInfo *connection, char *filename);
+static void FailedTransfer(ConnectionInfo *connection);
 static void ReplyNothing(ServerConnectionState *conn);
 static ServerConnectionState *NewConn(EvalContext *ctx, int sd);
 static void DeleteConn(ServerConnectionState *conn);
@@ -3357,7 +3357,7 @@ static void CfGetFile(ServerFileGetState *args)
         }
         else if (CFEngine_TLS == connection->type)
         {
-            SendTLS(connection->physical.tls, sendbuffer, args->buf_size);
+            SendTLS(connection->physical.tls->ssl, sendbuffer, args->buf_size);
         }
         return;
     }
@@ -3375,7 +3375,7 @@ static void CfGetFile(ServerFileGetState *args)
         }
         else if (CFEngine_TLS == connection->type)
         {
-            SendTLS(connection->physical.tls, sendbuffer, args->buf_size);
+            SendTLS(connection->physical.tls->ssl, sendbuffer, args->buf_size);
         }
     }
     else
@@ -3432,7 +3432,7 @@ static void CfGetFile(ServerFileGetState *args)
                     }
                     else if (CFEngine_TLS == connection->type)
                     {
-                        if (SendTLS(connection->physical.tls, sendbuffer, blocksize) == -1)
+                        if (SendTLS(connection->physical.tls->ssl, sendbuffer, blocksize) == -1)
                         {
                             Log(LOG_LEVEL_VERBOSE, "Send failed in GetFile. (send: %s)", GetErrorStr());
                         }
@@ -3464,7 +3464,7 @@ static void CfGetFile(ServerFileGetState *args)
             }
             else if (CFEngine_TLS == connection->type)
             {
-                if (SendTLS(connection->physical.tls, sendbuffer, sendlen) == -1)
+                if (SendTLS(connection->physical.tls->ssl, sendbuffer, sendlen) == -1)
                 {
                     Log(LOG_LEVEL_VERBOSE, "Send failed in GetFile. (send: %s)", GetErrorStr());
                     break;
@@ -3797,7 +3797,7 @@ static int CfSecOpenDirectory(ServerConnectionState *conn, char *sendbuffer, cha
     {
         sprintf(sendbuffer, "BAD: request to access a non-absolute filename\n");
         cipherlen = EncryptString(conn->encryption_type, sendbuffer, out, conn->session_key, strlen(sendbuffer) + 1);
-        SendTransaction(conn->sd_reply, out, cipherlen, CF_DONE);
+        SendTransaction(&conn->connection, out, cipherlen, CF_DONE);
         return -1;
     }
 
@@ -3806,7 +3806,7 @@ static int CfSecOpenDirectory(ServerConnectionState *conn, char *sendbuffer, cha
         Log(LOG_LEVEL_VERBOSE, "Couldn't open dir %s", dirname);
         snprintf(sendbuffer, CF_BUFSIZE, "BAD: cfengine, couldn't open dir %s\n", dirname);
         cipherlen = EncryptString(conn->encryption_type, sendbuffer, out, conn->session_key, strlen(sendbuffer) + 1);
-        SendTransaction(conn->sd_reply, out, cipherlen, CF_DONE);
+        SendTransaction(&conn->connection, out, cipherlen, CF_DONE);
         return -1;
     }
 
@@ -3821,7 +3821,7 @@ static int CfSecOpenDirectory(ServerConnectionState *conn, char *sendbuffer, cha
         if (strlen(dirp->d_name) + 1 + offset >= CF_BUFSIZE - CF_MAXLINKSIZE)
         {
             cipherlen = EncryptString(conn->encryption_type, sendbuffer, out, conn->session_key, offset + 1);
-            SendTransaction(conn->sd_reply, out, cipherlen, CF_MORE);
+            SendTransaction(&conn->connection, out, cipherlen, CF_MORE);
             offset = 0;
             memset(sendbuffer, 0, CF_BUFSIZE);
             memset(out, 0, CF_BUFSIZE);
@@ -3836,7 +3836,7 @@ static int CfSecOpenDirectory(ServerConnectionState *conn, char *sendbuffer, cha
 
     cipherlen =
         EncryptString(conn->encryption_type, sendbuffer, out, conn->session_key, offset + 2 + strlen(CFD_TERMINATOR));
-    SendTransaction(conn->sd_reply, out, cipherlen, CF_DONE);
+    SendTransaction(&conn->connection, out, cipherlen, CF_DONE);
     DirClose(dirh);
     return 0;
 }
@@ -3851,19 +3851,9 @@ static void Terminate(ConnectionInfo *connection)
 
     strcpy(buffer, CFD_TERMINATOR);
 
-    if (CFEngine_Classic == connection->type)
+    if (SendTransaction(connection, buffer, strlen(buffer) + 1, CF_DONE) == -1)
     {
-        if (SendTransaction(connection->physical.sd, buffer, strlen(buffer) + 1, CF_DONE) == -1)
-        {
-            Log(LOG_LEVEL_VERBOSE, "Unable to reply with terminator. (send: %s)", GetErrorStr());
-        }
-    }
-    else if (CFEngine_TLS == connection->type)
-    {
-        if (SendTransaction(connection->physical.tls, buffer, strlen(buffer) + 1, CF_DONE) == -1)
-        {
-            Log(LOG_LEVEL_VERBOSE, "Unable to reply with terminator. (send: %s)", GetErrorStr());
-        }
+        Log(LOG_LEVEL_VERBOSE, "Unable to reply with terminator. (send: %s)", GetErrorStr());
     }
 }
 
@@ -3965,7 +3955,7 @@ static void RefuseAccess(ServerConnectionState *conn, int size, char *errmesg)
 
     char sendbuffer[CF_BUFSIZE];
     snprintf(sendbuffer, CF_BUFSIZE, "%s", CF_FAILEDSTR);
-    SendTransaction(conn->sd_reply, sendbuffer, size, CF_DONE);
+    SendTransaction(&conn->connection, sendbuffer, size, CF_DONE);
 
     Log(LOG_LEVEL_INFO, "From (host=%s,user=%s,ip=%s)", hostname, username, ipaddr);
 
@@ -4057,14 +4047,14 @@ static int TransferRights(char *filename, ServerFileGetState *args, struct stat 
 
 /***************************************************************/
 
-static void AbortTransfer(int sd, char *filename)
+static void AbortTransfer(ConnectionInfo *connection, char *filename)
 {
     Log(LOG_LEVEL_VERBOSE, "Aborting transfer of file due to source changes");
 
     char sendbuffer[CF_BUFSIZE];
     snprintf(sendbuffer, CF_BUFSIZE, "%s%s: %s", CF_CHANGEDSTR1, CF_CHANGEDSTR2, filename);
 
-    if (SendTransaction(sd, sendbuffer, 0, CF_DONE) == -1)
+    if (SendTransaction(connection, sendbuffer, 0, CF_DONE) == -1)
     {
         Log(LOG_LEVEL_VERBOSE, "Send failed in GetFile. (send: %s)", GetErrorStr());
     }
@@ -4072,7 +4062,7 @@ static void AbortTransfer(int sd, char *filename)
 
 /***************************************************************/
 
-static void FailedTransfer(int sd)
+static void FailedTransfer(ConnectionInfo *connection)
 {
     Log(LOG_LEVEL_VERBOSE, "Transfer failure");
 
@@ -4080,7 +4070,7 @@ static void FailedTransfer(int sd)
 
     snprintf(sendbuffer, CF_BUFSIZE, "%s", CF_FAILEDSTR);
 
-    if (SendTransaction(sd, sendbuffer, 0, CF_DONE) == -1)
+    if (SendTransaction(connection, sendbuffer, 0, CF_DONE) == -1)
     {
         Log(LOG_LEVEL_VERBOSE, "Send failed in GetFile. (send: %s)", GetErrorStr());
     }
@@ -4094,7 +4084,7 @@ static void ReplyNothing(ServerConnectionState *conn)
 
     snprintf(buffer, CF_BUFSIZE, "Hello %s (%s), nothing relevant to do here...\n\n", conn->hostname, conn->ipaddr);
 
-    if (SendTransaction(conn->sd_reply, buffer, 0, CF_DONE) == -1)
+    if (SendTransaction(&conn->connection, buffer, 0, CF_DONE) == -1)
     {
         Log(LOG_LEVEL_ERR, "Unable to send transaction. (send: %s)", GetErrorStr());
     }
@@ -4121,7 +4111,7 @@ static int CheckStoreKey(ServerConnectionState *conn, RSA *key)
         if ((BN_cmp(savedkey->e, key->e) == 0) && (BN_cmp(savedkey->n, key->n) == 0))
         {
             Log(LOG_LEVEL_VERBOSE, "The public key identity was confirmed as %s@%s", conn->username, conn->hostname);
-            SendTransaction(conn->sd_reply, "OK: key accepted", 0, CF_DONE);
+            SendTransaction(&conn->connection, "OK: key accepted", 0, CF_DONE);
             RSA_free(savedkey);
             return true;
         }
@@ -4134,14 +4124,14 @@ static int CheckStoreKey(ServerConnectionState *conn, RSA *key)
         Log(LOG_LEVEL_VERBOSE, "Host %s/%s was found in the list of hosts to trust", conn->hostname, conn->ipaddr);
         conn->trust = true;
         /* conn->maproot = false; ?? */
-        SendTransaction(conn->sd_reply, "OK: unknown key was accepted on trust", 0, CF_DONE);
+        SendTransaction(&conn->connection, "OK: unknown key was accepted on trust", 0, CF_DONE);
         SavePublicKey(conn->username, udigest, key);
         return true;
     }
     else
     {
         Log(LOG_LEVEL_VERBOSE, "No previous key found, and unable to accept this one on trust");
-        SendTransaction(conn->sd_reply, "BAD: key could not be accepted on trust", 0, CF_DONE);
+        SendTransaction(&conn->connection, "BAD: key could not be accepted on trust", 0, CF_DONE);
         return false;
     }
 }
@@ -4151,113 +4141,7 @@ static int CheckStoreKey(ServerConnectionState *conn, RSA *key)
  */
 static int DoStartTLS(ServerConnectionState *connection)
 {
-    int result = 0;
-    char buffer[CF_BUFSIZE];
-    snprintf(buffer, CF_BUFSIZE, "ACK");
-
-    /*
-     * We prepare everything before sending the ACK
-     */
-    connection->tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
-    connection->tls->method = TLSv1_server_method();
-    connection->tls->context = SSL_CTX_new(connection->tls->method);
-
-    if (!connection->tls->context)
-    {
-        Log(LOG_LEVEL_INFO, "Unable to create the SSL context");
-        free (connection->tls);
-        return -1;
-    }
-
-    connection->tls->ssl = SSL_new(connection->tls->context);
-
-    if (!connection->tls->ssl)
-    {
-        Log(LOG_LEVEL_INFO, "Unable to create the SSL object");
-        SSL_CTX_free (connection->tls->context);
-        free (connection->tls);
-        return -1;
-    }
-
-    /*
-     * Now we are ready to tell the client to try the TLS initialization.
-     */
-    result = SendTransaction(connection->sd_reply, buffer, 0, CF_DONE);
-    if (result == -1)
-    {
-        Log(LOG_LEVEL_ERR, "Unable to send transaction. (send: %s)", GetErrorStr());
-    }
-
-    SSL_set_fd(connection->tls->ssl, connection->sd_reply);
-
-    /*
-     * Now we wait for the client to send us the TLS request.
-     */
-    int total_tries = 0;
-    do {
-        result = SSL_accept(connection->tls->ssl);
-        if (result <= 0)
-        {
-            /*
-             * Identify the problem and if possible try to fix it.
-             */
-            int error = SSL_get_error(connection->tls->ssl, result);
-            if ((SSL_ERROR_WANT_WRITE == error) || (SSL_ERROR_WANT_READ == error))
-            {
-                Log(LOG_LEVEL_DEBUG, "Recoverable error in TLS handshake, trying to fix it");
-                /*
-                 * We can try to fix this.
-                 * This error means that there was not enough data in the buffer, using select
-                 * to wait until we get more data.
-                 */
-                fd_set rfds;
-                struct timeval tv;
-                int tries = 0;
-
-                do {
-                    SET_DEFAULT_TLS_TIMEOUT(tv);
-                    FD_ZERO(&rfds);
-                    FD_SET(connection->sd_reply, &rfds);
-
-                    result = select(connection->sd_reply+1, &rfds, NULL, NULL, &tv);
-                    if (result > 0)
-                    {
-                        /*
-                         * Ready to receive data
-                         */
-                        break;
-                    }
-                    else
-                    {
-                        Log(LOG_LEVEL_DEBUG, "select(2) timed out, retrying (tries: %d)", tries);
-                        ++tries;
-                    }
-                } while (tries <= DEFAULT_TLS_TRIES);
-            }
-            else
-            {
-                /*
-                 * Unrecoverable error
-                 */
-                Log(LOG_LEVEL_DEBUG, "Unrecoverable error in TLS handshake (error: %d)", error);
-                SSL_free (connection->tls->ssl);
-                SSL_CTX_free (connection->tls->context);
-                free (connection->tls);
-                return -1;
-            }
-        }
-        else
-        {
-            /*
-             * TLS channel established, start talking!
-             */
-            Log (LOG_LEVEL_INFO, "TLS connection established");
-            connection->type_of_connection = CFEngine_TLS;
-            break;
-        }
-        ++total_tries;
-    } while (total_tries <= DEFAULT_TLS_TRIES);
-    return 0;
+    return ServerStartTLS(&connection->connection);
 }
 
 /***************************************************************/
@@ -4298,10 +4182,36 @@ static ServerConnectionState *NewConn(EvalContext *ctx, int sd)
 
 static void DeleteConn(ServerConnectionState *conn)
 {
-    Log(LOG_LEVEL_DEBUG, "Closing socket %d from '%s'", conn->connection.physical.sd, conn->ipaddr);
+    if (CFEngine_Classic == conn->connection.type)
+    {
+        Log(LOG_LEVEL_DEBUG, "Closing socket %d from '%s'", conn->connection.physical.sd, conn->ipaddr);
 
-    cf_closesocket(conn->connection.physical.sd);
+        cf_closesocket(conn->connection.physical.sd);
+    }
+    else if (CFEngine_TLS == conn->connection.type)
+    {
+        Log(LOG_LEVEL_DEBUG, "Closing TLS connection from '%s'", conn->ipaddr);
 
+        /*
+         * Before shutting down the TLS connection we need to get the socket descriptor
+         * so we can properly close it afterwards.
+         * If that fails, then we just return.
+         */
+        int sd = SSL_get_fd(conn->connection.physical.tls->ssl);
+
+        if (sd < 0)
+        {
+            return;
+        }
+
+        SSL_shutdown(conn->connection.physical.tls->ssl);
+
+        cf_closesocket(sd);
+    }
+    else
+    {
+        return;
+    }
     if (conn->session_key != NULL)
     {
         free(conn->session_key);

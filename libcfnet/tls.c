@@ -27,6 +27,121 @@
 #include "logging.h"
 #include "misc_lib.h"
 
+int ServerStartTLS(ConnectionInfo *connection)
+{
+    int result = 0;
+    char buffer[CF_BUFSIZE];
+    snprintf(buffer, CF_BUFSIZE, "ACK");
+
+    /*
+     * We prepare everything before sending the ACK
+     */
+    connection->physical.tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
+    connection->physical.tls->method = TLSv1_server_method();
+    connection->physical.tls->context = SSL_CTX_new(connection->tls->method);
+
+    if (!connection->physical.tls->context)
+    {
+        Log(LOG_LEVEL_INFO, "Unable to create the SSL context");
+        free (connection->physical.tls);
+        return -1;
+    }
+
+    connection->physical.tls->ssl = SSL_new(connection->physical.tls->context);
+
+    if (!connection->physical.tls->ssl)
+    {
+        Log(LOG_LEVEL_INFO, "Unable to create the SSL object");
+        SSL_CTX_free (connection->physical.tls->context);
+        free (connection->physical.tls);
+        return -1;
+    }
+
+    /*
+     * Now we are ready to tell the client to try the TLS initialization.
+     */
+    result = SendTransaction(connection->physical.sd, buffer, 0, CF_DONE);
+    if (result == -1)
+    {
+        Log(LOG_LEVEL_ERR, "Unable to send transaction, aborting connection. (send: %s)", GetErrorStr());
+        /*
+         * It is not as easy as closing the socket. We need to come up with a proper
+         * way to bring down the connection.
+         */
+    }
+
+    SSL_set_fd(connection->physical.tls->ssl, connection->physical.sd);
+
+    /*
+     * Now we wait for the client to send us the TLS request.
+     */
+    int total_tries = 0;
+    do {
+        result = SSL_accept(connection->physical.tls->ssl);
+        if (result <= 0)
+        {
+            /*
+             * Identify the problem and if possible try to fix it.
+             */
+            int error = SSL_get_error(connection->physical.tls->ssl, result);
+            if ((SSL_ERROR_WANT_WRITE == error) || (SSL_ERROR_WANT_READ == error))
+            {
+                Log(LOG_LEVEL_DEBUG, "Recoverable error in TLS handshake, trying to fix it");
+                /*
+                 * We can try to fix this.
+                 * This error means that there was not enough data in the buffer, using select
+                 * to wait until we get more data.
+                 */
+                fd_set rfds;
+                struct timeval tv;
+                int tries = 0;
+
+                do {
+                    SET_DEFAULT_TLS_TIMEOUT(tv);
+                    FD_ZERO(&rfds);
+                    FD_SET(connection->sd_reply, &rfds);
+
+                    result = select(connection->physical.sd+1, &rfds, NULL, NULL, &tv);
+                    if (result > 0)
+                    {
+                        /*
+                         * Ready to receive data
+                         */
+                        break;
+                    }
+                    else
+                    {
+                        Log(LOG_LEVEL_DEBUG, "select(2) timed out, retrying (tries: %d)", tries);
+                        ++tries;
+                    }
+                } while (tries <= DEFAULT_TLS_TRIES);
+            }
+            else
+            {
+                /*
+                 * Unrecoverable error
+                 */
+                Log(LOG_LEVEL_DEBUG, "Unrecoverable error in TLS handshake (error: %d)", error);
+                SSL_free (connection->physical.tls->ssl);
+                SSL_CTX_free (connection->physical.tls->context);
+                free (connection->physical.tls);
+                return -1;
+            }
+        }
+        else
+        {
+            /*
+             * TLS channel established, start talking!
+             */
+            Log (LOG_LEVEL_INFO, "TLS connection established");
+            connection->type = CFEngine_TLS;
+            break;
+        }
+        ++total_tries;
+    } while (total_tries <= DEFAULT_TLS_TRIES);
+    return 0;
+}
+
 int SendTLS(SSL *ssl, const char *buffer, int length)
 {
     if (!ssl || !buffer || (length < 0))

@@ -1056,12 +1056,22 @@ static FnCallResult FnCallReadTcp(EvalContext *ctx, FnCall *fp, Rlist *finalargs
 
     if (strlen(sendstring) > 0)
     {
-        if (SendSocketStream(conn->sd, sendstring, strlen(sendstring), 0) == -1)
-        {
-            cf_closesocket(conn->sd);
-            DeleteAgentConn(conn);
-            return (FnCallResult) { FNCALL_FAILURE };
-        }
+        int sent = 0;
+        int result = 0;
+        size_t length = strlen(sendstring);
+        do {
+            result = send(conn->sd, sendstring, length, 0);
+            if (result < 0)
+            {
+                cf_closesocket(conn->sd);
+                DeleteAgentConn(conn);
+                return (FnCallResult) { FNCALL_FAILURE };
+            }
+            else
+            {
+                sent += result;
+            }
+        } while (sent < length);
     }
 
     if ((n_read = recv(conn->sd, buffer, val, 0)) == -1)
