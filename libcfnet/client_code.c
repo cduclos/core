@@ -772,7 +772,7 @@ int CopyRegularFileNet(char *source, char *new, off_t size, AgentConnection *con
 
         /* Stage C1 - receive */
 
-        if ((n_read = RecvSocketStream(&conn->connection, buf, toget)) == -1)
+        if ((n_read = RecvSocketStream(conn->connection.physical.sd, buf, toget)) == -1)
         {
             /* This may happen on race conditions,
              * where the file has shrunk since we asked for its size in SYNCH ... STAT source */

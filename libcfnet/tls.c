@@ -23,7 +23,8 @@
 */
 
 #include "tls.h"
-
+#include "cf3.defs.h"
+#include "alloc.h"
 #include "logging.h"
 #include "misc_lib.h"
 
@@ -38,7 +39,7 @@ int ServerStartTLS(ConnectionInfo *connection)
      */
     connection->physical.tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
     connection->physical.tls->method = TLSv1_server_method();
-    connection->physical.tls->context = SSL_CTX_new(connection->tls->method);
+    connection->physical.tls->context = SSL_CTX_new(connection->physical.tls->method);
 
     if (!connection->physical.tls->context)
     {
@@ -99,7 +100,7 @@ int ServerStartTLS(ConnectionInfo *connection)
                 do {
                     SET_DEFAULT_TLS_TIMEOUT(tv);
                     FD_ZERO(&rfds);
-                    FD_SET(connection->sd_reply, &rfds);
+                    FD_SET(connection->physical.sd, &rfds);
 
                     result = select(connection->physical.sd+1, &rfds, NULL, NULL, &tv);
                     if (result > 0)
