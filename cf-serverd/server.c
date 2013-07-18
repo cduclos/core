@@ -379,7 +379,7 @@ static void *HandleConnection(ServerConnectionState *conn)
 
         Log(LOG_LEVEL_ERR, "Too many threads (>=%d) -- increase server maxconnections?", CFD_MAXPROCESSES);
         snprintf(output, CF_BUFSIZE, "BAD: Server is currently too busy -- increase maxconnections or splaytime?");
-        SendTransaction(conn->sd_reply, output, 0, CF_DONE);
+        SendTransaction(&conn->connection, output, 0, CF_DONE);
         DeleteConn(conn);
         return NULL;
     }
@@ -390,7 +390,7 @@ static void *HandleConnection(ServerConnectionState *conn)
 
     TRIES = 0;                  /* As long as there is activity, we're not stuck */
 
-    DisableSendDelays(conn->sd_reply);
+    DisableSendDelays(conn->connection.physical.sd);
 
     struct timeval tv = {
         .tv_sec = CONNTIMEOUT * 20,
@@ -499,12 +499,12 @@ static int CFEngine_Classic_Protocol(EvalContext *ctx, ServerConnectionState *co
         if (!MatchClasses(ctx, conn))
         {
             Log(LOG_LEVEL_INFO, "Server refusal due to failed class/context match");
-            Terminate(conn->sd_reply);
+            Terminate(&conn->connection);
             return false;
         }
 
         DoExec(ctx, conn, args);
-        Terminate(conn->sd_reply);
+        Terminate(&conn->connection);
         return false;
 
     case PROTOCOL_COMMAND_VERSION:
@@ -1116,7 +1116,7 @@ static int CFEngine_TLS_Protocol(EvalContext *ctx, ServerConnectionState *conn)
         if (!MatchClasses(ctx, conn))
         {
             Log(LOG_LEVEL_INFO, "Server refusal due to failed class/context match");
-            Terminate(conn->sd_reply);
+            Terminate(&conn->connection);
             return false;
         }
 
@@ -1403,7 +1403,7 @@ static int CFEngine_TLS_Protocol(EvalContext *ctx, ServerConnectionState *conn)
         {
             sprintf(conn->output, "Couldn't read system clock\n");
             Log(LOG_LEVEL_INFO, "Couldn't read system clock. (time: %s)", GetErrorStr());
-            SendTransaction(conn->sd_reply, "BAD: clocks out of synch", 0, CF_DONE);
+            SendTransaction(&conn->connection, "BAD: clocks out of synch", 0, CF_DONE);
             return true;
         }
 
@@ -1420,7 +1420,7 @@ static int CFEngine_TLS_Protocol(EvalContext *ctx, ServerConnectionState *conn)
         {
             snprintf(conn->output, CF_BUFSIZE - 1, "BAD: Clocks are too far unsynchronized %ld/%ld\n", (long) tloc,
                      (long) trem);
-            SendTransaction(conn->sd_reply, conn->output, 0, CF_DONE);
+            SendTransaction(&conn->connection, conn->output, 0, CF_DONE);
             return true;
         }
         else
@@ -1649,7 +1649,7 @@ static int BusyWithConnection(EvalContext *ctx, ServerConnectionState *conn)
   /* check that the incoming data are sensible    */
   /* and extract the information from the message */
 {
-    if (CFEngine_Classic == conn->type_of_connection)
+    if (CFEngine_Classic == conn->connection.type)
     {
         return CFEngine_Classic_Protocol(ctx, conn);
     }
@@ -1837,7 +1837,7 @@ static void DoExec(EvalContext *ctx, ServerConnectionState *conn, char *args)
         Log(LOG_LEVEL_ERR, "Couldn't open pipe to command '%s'. (pipe: %s)", ebuff, GetErrorStr());
         char sendbuffer[CF_BUFSIZE];
         snprintf(sendbuffer, CF_BUFSIZE, "Unable to run %s\n", ebuff);
-        SendTransaction(conn->sd_reply, sendbuffer, 0, CF_DONE);
+        SendTransaction(&conn->connection, sendbuffer, 0, CF_DONE);
         return;
     }
 
@@ -3371,7 +3371,7 @@ static void CfGetFile(ServerFileGetState *args)
         snprintf(sendbuffer, CF_BUFSIZE, "%s", CF_FAILEDSTR);
         if (CFEngine_Classic == connection->type)
         {
-            SendSocketStream(sd, sendbuffer, args->buf_size, 0);
+            SendSocketStream(connection->physical.sd, sendbuffer, args->buf_size, 0);
         }
         else if (CFEngine_TLS == connection->type)
         {
@@ -3508,7 +3508,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
     if (!TransferRights(filename, args, &sb))
     {
         RefuseAccess(args->connect, args->buf_size, "");
-        FailedTransfer(sd);
+        FailedTransfer(args->connect->connection.physical.sd);
     }
 
     EVP_CIPHER_CTX_init(&ctx);
@@ -3516,7 +3516,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
     if ((fd = open(filename, O_RDONLY)) == -1)
     {
         Log(LOG_LEVEL_ERR, "Open error of file '%s'. (open: %s)", filename, GetErrorStr());
-        FailedTransfer(sd);
+        FailedTransfer(args->connect->connection.physical.sd);
     }
     else
     {
@@ -3552,7 +3552,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
 
             if (sb.st_size != savedlen)
             {
-                AbortTransfer(sd, filename);
+                AbortTransfer(args->connect->connection.physical.sd, filename);
                 break;
             }
 
@@ -3564,7 +3564,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
 
                 if (!EVP_EncryptUpdate(&ctx, out, &cipherlen, sendbuffer, n_read))
                 {
-                    FailedTransfer(sd);
+                    FailedTransfer(args->connect->connection.physical.sd);
                     EVP_CIPHER_CTX_cleanup(&ctx);
                     close(fd);
                     return;
@@ -3572,7 +3572,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
 
                 if (!EVP_EncryptFinal_ex(&ctx, out + cipherlen, &finlen))
                 {
-                    FailedTransfer(sd);
+                    FailedTransfer(args->connect->connection.physical.sd);
                     EVP_CIPHER_CTX_cleanup(&ctx);
                     close(fd);
                     return;
