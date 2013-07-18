@@ -1060,10 +1060,10 @@ static FnCallResult FnCallReadTcp(EvalContext *ctx, FnCall *fp, Rlist *finalargs
         int result = 0;
         size_t length = strlen(sendstring);
         do {
-            result = send(conn->sd, sendstring, length, 0);
+            result = send(conn->connection.physical.sd, sendstring, length, 0);
             if (result < 0)
             {
-                cf_closesocket(conn->sd);
+                cf_closesocket(conn->connection.physical.sd);
                 DeleteAgentConn(conn);
                 return (FnCallResult) { FNCALL_FAILURE };
             }
@@ -1074,18 +1074,18 @@ static FnCallResult FnCallReadTcp(EvalContext *ctx, FnCall *fp, Rlist *finalargs
         } while (sent < length);
     }
 
-    if ((n_read = recv(conn->sd, buffer, val, 0)) == -1)
+    if ((n_read = recv(conn->connection.physical.sd, buffer, val, 0)) == -1)
     {
     }
 
     if (n_read == -1)
     {
-        cf_closesocket(conn->sd);
+        cf_closesocket(conn->connection.physical.sd);
         DeleteAgentConn(conn);
         return (FnCallResult) { FNCALL_FAILURE };
     }
 
-    cf_closesocket(conn->sd);
+    cf_closesocket(conn->connection.physical.sd);
     DeleteAgentConn(conn);
 
     return (FnCallResult) { FNCALL_SUCCESS, { xstrdup(buffer), RVAL_TYPE_SCALAR } };
