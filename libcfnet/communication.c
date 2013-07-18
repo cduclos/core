@@ -57,9 +57,8 @@ void DeleteAgentConn(AgentConnection *conn)
         /*
          * Shut down the TLS connection
          */
-        SSL_shutdown(conn->connection.physical.tls);
+        SSL_shutdown(conn->connection.physical.tls->ssl);
         SSL_CTX_free(conn->connection.physical.tls->context);
-        free ()
     }
     free(conn->session_key);
     free(conn->this_server);
