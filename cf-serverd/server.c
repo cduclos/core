@@ -1659,7 +1659,7 @@ static int BusyWithConnection(EvalContext *ctx, ServerConnectionState *conn)
      * for the type of connection after we are done with the
      * classic connection we avoid a more complicated logic.
      */
-    if (CFEngine_TLS == conn->type_of_connection)
+    if (CFEngine_TLS == conn->connection.type)
     {
         return CFEngine_TLS_Protocol(ctx, conn);
     }
@@ -3508,7 +3508,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
     if (!TransferRights(filename, args, &sb))
     {
         RefuseAccess(args->connect, args->buf_size, "");
-        FailedTransfer(args->connect->connection.physical.sd);
+        FailedTransfer(connection);
     }
 
     EVP_CIPHER_CTX_init(&ctx);
@@ -3516,7 +3516,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
     if ((fd = open(filename, O_RDONLY)) == -1)
     {
         Log(LOG_LEVEL_ERR, "Open error of file '%s'. (open: %s)", filename, GetErrorStr());
-        FailedTransfer(args->connect->connection.physical.sd);
+        FailedTransfer(connection);
     }
     else
     {
@@ -3552,7 +3552,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
 
             if (sb.st_size != savedlen)
             {
-                AbortTransfer(args->connect->connection.physical.sd, filename);
+                AbortTransfer(connection, filename);
                 break;
             }
 
@@ -3564,7 +3564,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
 
                 if (!EVP_EncryptUpdate(&ctx, out, &cipherlen, sendbuffer, n_read))
                 {
-                    FailedTransfer(args->connect->connection.physical.sd);
+                    FailedTransfer(connection);
                     EVP_CIPHER_CTX_cleanup(&ctx);
                     close(fd);
                     return;
@@ -3572,7 +3572,7 @@ static void CfEncryptGetFile(ServerFileGetState *args)
 
                 if (!EVP_EncryptFinal_ex(&ctx, out + cipherlen, &finlen))
                 {
-                    FailedTransfer(args->connect->connection.physical.sd);
+                    FailedTransfer(connection);
                     EVP_CIPHER_CTX_cleanup(&ctx);
                     close(fd);
                     return;
