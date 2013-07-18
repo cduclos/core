@@ -1921,20 +1921,20 @@ static FnCallResult FnCallSelectServers(EvalContext *ctx, FnCall *fp, Rlist *fin
 
         if (strlen(sendstring) > 0)
         {
-            if (SendSocketStream(conn->sd, sendstring, strlen(sendstring), 0) == -1)
+            if (SendSocketStream(conn->connection.physical.sd, sendstring, strlen(sendstring), 0) == -1)
             {
-                cf_closesocket(conn->sd);
+                cf_closesocket(conn->connection.physical.sd);
                 DeleteAgentConn(conn);
                 continue;
             }
 
-            if ((n_read = recv(conn->sd, buffer, val, 0)) == -1)
+            if ((n_read = recv(conn->connection.physical.sd, buffer, val, 0)) == -1)
             {
             }
 
             if (n_read == -1)
             {
-                cf_closesocket(conn->sd);
+                cf_closesocket(conn->connection.physical.sd);
                 DeleteAgentConn(conn);
                 continue;
             }
@@ -1967,7 +1967,7 @@ static FnCallResult FnCallSelectServers(EvalContext *ctx, FnCall *fp, Rlist *fin
             count++;
         }
 
-        cf_closesocket(conn->sd);
+        cf_closesocket(conn->connection.physical.sd);
         DeleteAgentConn(conn);
     }
 
