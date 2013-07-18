@@ -77,7 +77,7 @@ int IdentifyAgent(ConnectionInfo *connection)
         struct sockaddr_storage myaddr = {0};
         socklen_t myaddr_len = sizeof(myaddr);
 
-        if (getsockname(sd, (struct sockaddr *) &myaddr, &myaddr_len) == -1)
+        if (getsockname(connection->physical.sd, (struct sockaddr *) &myaddr, &myaddr_len) == -1)
         {
             Log(LOG_LEVEL_ERR, "Couldn't get socket address. (getsockname: %s)", GetErrorStr());
             return false;
