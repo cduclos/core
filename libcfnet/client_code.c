@@ -239,7 +239,7 @@ static AgentConnection *ServerConnection(const char *server, FileCopy fc, int *e
     GetCurrentUserName(conn->username, CF_SMALLBUF);
 #endif /* !__MINGW32__ */
 
-    if (conn->sd == SOCKET_INVALID)
+    if (conn->connection.physical.sd == SOCKET_INVALID)
     {
         if (!ServerConnect(conn, server, fc))
         {
@@ -251,7 +251,7 @@ static AgentConnection *ServerConnection(const char *server, FileCopy fc, int *e
             return NULL;
         }
 
-        if (conn->sd < 0)                      /* INVALID or OFFLINE socket */
+        if (conn->connection.physical.sd < 0)                      /* INVALID or OFFLINE socket */
         {
             UnexpectedError("ServerConnect() succeeded but socket descriptor is %d!",
                             conn->sd);
@@ -259,7 +259,7 @@ static AgentConnection *ServerConnection(const char *server, FileCopy fc, int *e
             return NULL;
         }
 
-        if (!IdentifyAgent(conn->sd))
+        if (!IdentifyAgent(conn->connection.physical.sd))
         {
             Log(LOG_LEVEL_ERR, "Id-authentication for '%s' failed", VFQNAME);
             errno = EPERM;
@@ -290,9 +290,9 @@ void DisconnectServer(AgentConnection *conn)
 {
     if (conn)
     {
-        if (conn->sd >= 0)                        /* Not INVALID or OFFLINE */
+        if (conn->connection.physical.sd >= 0)                        /* Not INVALID or OFFLINE */
         {
-            cf_closesocket(conn->sd);
+            cf_closesocket(conn->connection.physical.sd);
             conn->sd = SOCKET_INVALID;
         }
         DeleteAgentConn(conn);

@@ -140,7 +140,7 @@ int ReceiveTransaction(ConnectionInfo *connection, char *buffer, int *more)
     }
     else if (CFEngine_TLS == connection->type)
     {
-        result = ReceiveTLS(connection->physical.tls, buffer, len);
+        result = ReceiveTLS(connection->physical.tls->ssl, buffer, len);
     }
     else
     {
