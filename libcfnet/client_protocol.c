@@ -66,7 +66,7 @@ int TryTLS(ConnectionInfo *connection)
     if (strcmp(buffer, ACK) == 0)
     {
         Log(LOG_LEVEL_DEBUG, "TLS negotiation accepted, starting TLS connection");
-        int sd = connection.physical.sd;
+        int sd = connection_>physical.sd;
         connection->physical.tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
         connection->physical.tls->method = TLSv1_server_method();
         connection->physical.tls->context = SSL_CTX_new(connection->physical.tls->method);
@@ -151,7 +151,7 @@ int TryTLS(ConnectionInfo *connection)
                  * TLS channel established, start talking!
                  */
                 Log (LOG_LEVEL_INFO, "TLS connection established");
-                connection.type = CFEngine_TLS;
+                connection->type = CFEngine_TLS;
                 break;
             }
             ++total_tries;
@@ -318,9 +318,9 @@ int AuthenticateAgent(AgentConnection *conn, bool trust_key)
     /*
      * Try TLS
      */
-    if (CFEngine_Classic == connection->type)
+    if (CFEngine_Classic == conn->connection.type)
     {
-        TryTLS(connection);
+        TryTLS(&conn->connection);
     }
 
     enterprise_field = CfEnterpriseOptions();
