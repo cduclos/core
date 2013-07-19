@@ -1498,7 +1498,7 @@ int TryTLS(AgentConnection *conn)
         conn->connection.physical.tls->method = TLSv1_server_method();
         conn->connection.physical.tls->context = SSL_CTX_new(conn->connection.physical.tls->method);
 
-        if (!connection->physical.tls->context)
+        if (!conn->connection.physical.tls->context)
         {
             Log(LOG_LEVEL_INFO, "Unable to create the SSL context");
             free (conn->connection.physical.tls);
@@ -1536,14 +1536,14 @@ int TryTLS(AgentConnection *conn)
                      * This error means that there was not enough data in the buffer, using select
                      * to wait until we get more data.
                      */
-                    fd_set rfds;
+                    fd_set wfds;
                     struct timeval tv;
                     int tries = 0;
 
                     do {
                         SET_DEFAULT_TLS_TIMEOUT(tv);
                         FD_ZERO(&wfds);
-                        FD_SET(conn->connection.physical.sd, &rfds);
+                        FD_SET(conn->connection.physical.sd, &wfds);
 
                         result = select(conn->connection.physical.sd+1, NULL, &wfds, NULL, &tv);
                         if (result > 0)
