@@ -38,6 +38,7 @@ int ServerStartTLS(ConnectionInfo *connection)
     /*
      * We prepare everything before sending the ACK
      */
+    int sd = connection->physical.sd;
     connection->physical.tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
     connection->physical.tls->method = TLSv1_server_method();
     connection->physical.tls->context = SSL_CTX_new(connection->physical.tls->method);
@@ -72,7 +73,7 @@ int ServerStartTLS(ConnectionInfo *connection)
          */
     }
 
-    SSL_set_fd(connection->physical.tls->ssl, connection->physical.sd);
+    SSL_set_fd(connection->physical.tls->ssl, sd);
 
     /*
      * Now we wait for the client to send us the TLS request.
