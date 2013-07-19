@@ -45,7 +45,7 @@ int ServerStartTLS(ConnectionInfo *connection)
 
     if (!connection->physical.tls->context)
     {
-        Log(LOG_LEVEL_INFO, "Unable to create the SSL context");
+        Log(LOG_LEVEL_CRIT, "Unable to create the SSL context");
         free (connection->physical.tls);
         return -1;
     }
@@ -54,7 +54,7 @@ int ServerStartTLS(ConnectionInfo *connection)
 
     if (!connection->physical.tls->ssl)
     {
-        Log(LOG_LEVEL_INFO, "Unable to create the SSL object");
+        Log(LOG_LEVEL_CRIT, "Unable to create the SSL object");
         SSL_CTX_free (connection->physical.tls->context);
         free (connection->physical.tls);
         return -1;

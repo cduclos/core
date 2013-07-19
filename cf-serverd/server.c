@@ -983,6 +983,7 @@ static int CFEngine_Classic_Protocol(EvalContext *ctx, ServerConnectionState *co
          * After receiving a STARTTLS, the server sends "TLS_ACK" back. The server enters a loop waiting
          * for the client to connect using TLS.
          */
+        Log(LOG_LEVEL_CRIT, "Received STARTTLS");
         if (DoStartTLS(conn) < 0)
         {
             Log(LOG_LEVEL_INFO, "Could not start TLS session as requested by client");
