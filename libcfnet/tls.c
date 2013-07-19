@@ -63,7 +63,7 @@ int ServerStartTLS(ConnectionInfo *connection)
     /*
      * Now we are ready to tell the client to try the TLS initialization.
      */
-    result = SendTransaction(connection, buffer, 0, CF_DONE);
+    result = SendTransaction(connection, buffer, 0, CF_MORE);
     if (result == -1)
     {
         Log(LOG_LEVEL_ERR, "Unable to send transaction, aborting connection. (send: %s)", GetErrorStr());
