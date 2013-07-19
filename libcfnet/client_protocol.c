@@ -41,6 +41,130 @@ extern char VFQNAME[];
 
 
 static bool SetSessionKey(AgentConnection *conn);
+int TryTLS(ConnectionInfo *conn);
+
+/*
+ * The tricky part about enabling TLS is that the server might disconnect us if
+ * it does not support the STARTTLS command. Once disconnected we will need to
+ * reconnect and make sure everything works again.
+ */
+int TryTLS(ConnectionInfo *conn)
+{
+    Log (LOG_LEVEL_DEBUG, "Trying to enable TLS");
+    char STARTTLS[] = "STARTTLS";
+    char ACK[] = "ACK";
+    char buffer[CF_BUFSIZE];
+    int result = 0;
+
+    result = SendTransaction(&conn->connection, STARTTLS, strlen(STARTTLS), CF_MORE);
+    if (result < 0)
+    {
+        Log(LOG_LEVEL_DEBUG, "Failed to start TLS");
+        return -1;
+    }
+    result = ReceiveTransaction(&conn->connection, buffer, NULL);
+    if (strcmp(buffer, ACK) == 0)
+    {
+        Log(LOG_LEVEL_DEBUG, "TLS negotiation accepted, starting TLS connection");
+        int sd = conn->connection.physical.sd;
+        conn->connection.physical.tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
+        conn->connection.physical.tls->method = TLSv1_server_method();
+        conn->connection.physical.tls->context = SSL_CTX_new(conn->connection.physical.tls->method);
+
+        if (!conn->connection.physical.tls->context)
+        {
+            Log(LOG_LEVEL_INFO, "Unable to create the SSL context");
+            free (conn->connection.physical.tls);
+            return -1;
+        }
+
+        conn->connection.physical.tls->ssl = SSL_new(conn->connection.physical.tls->context);
+
+        if (!conn->connection.physical.tls->ssl)
+        {
+            Log(LOG_LEVEL_INFO, "Unable to create the SSL object");
+            SSL_CTX_free (conn->connection.physical.tls->context);
+            free (conn->connection.physical.tls);
+            return -1;
+        }
+        SSL_set_fd(conn->connection.physical.tls->ssl, sd);
+
+        /*
+         * Now we send the TLS request to the server
+         */
+        int total_tries = 0;
+        do {
+            result = SSL_connect(conn->connection.physical.tls->ssl);
+            if (result <= 0)
+            {
+                /*
+                 * Identify the problem and if possible try to fix it.
+                 */
+                int error = SSL_get_error(conn->connection.physical.tls->ssl, result);
+                if ((SSL_ERROR_WANT_WRITE == error) || (SSL_ERROR_WANT_READ == error))
+                {
+                    Log(LOG_LEVEL_DEBUG, "Recoverable error in TLS handshake, trying to fix it");
+                    /*
+                     * We can try to fix this.
+                     * This error means that there was not enough data in the buffer, using select
+                     * to wait until we get more data.
+                     */
+                    fd_set wfds;
+                    struct timeval tv;
+                    int tries = 0;
+
+                    do {
+                        SET_DEFAULT_TLS_TIMEOUT(tv);
+                        FD_ZERO(&wfds);
+                        FD_SET(conn->connection.physical.sd, &wfds);
+
+                        result = select(conn->connection.physical.sd+1, NULL, &wfds, NULL, &tv);
+                        if (result > 0)
+                        {
+                            /*
+                             * Ready to send data
+                             */
+                            break;
+                        }
+                        else
+                        {
+                            Log(LOG_LEVEL_DEBUG, "select(2) timed out, retrying (tries: %d)", tries);
+                            ++tries;
+                        }
+                    } while (tries <= DEFAULT_TLS_TRIES);
+                }
+                else
+                {
+                    /*
+                     * Unrecoverable error
+                     */
+                    Log(LOG_LEVEL_DEBUG, "Unrecoverable error in TLS handshake (error: %d)", error);
+                    SSL_free (conn->connection.physical.tls->ssl);
+                    SSL_CTX_free (conn->connection.physical.tls->context);
+                    free (conn->connection.physical.tls);
+                    return -1;
+                }
+            }
+            else
+            {
+                /*
+                 * TLS channel established, start talking!
+                 */
+                Log (LOG_LEVEL_INFO, "TLS connection established");
+                conn->connection.type = CFEngine_TLS;
+                break;
+            }
+            ++total_tries;
+        } while (total_tries <= DEFAULT_TLS_TRIES);
+    }
+    else
+    {
+        Log(LOG_LEVEL_DEBUG, "Wrong server reply (%s)", buffer);
+        return -1;
+    }
+    Log(LOG_LEVEL_DEBUG, "TLS enabled");
+    return 0;
+}
 
 /*********************************************************************/
 
@@ -145,6 +269,13 @@ int IdentifyAgent(ConnectionInfo *connection)
         }
     }
 
+    /*
+     * Try TLS
+     */
+    if (CFEngine_Classic == connection->type)
+    {
+        TryTLS(connection);
+    }
 /* client always identifies as root on windows */
 #ifdef __MINGW32__
     snprintf(uname, sizeof(uname), "%s", "root");
@@ -182,6 +313,14 @@ int AuthenticateAgent(AgentConnection *conn, bool trust_key)
     {
         Log(LOG_LEVEL_ERR, "No public/private key pair found at '%s'", PublicKeyFile(GetWorkDir()));
         return false;
+    }
+
+    /*
+     * Try TLS
+     */
+    if (CFEngine_Classic == connection->type)
+    {
+        TryTLS(connection);
     }
 
     enterprise_field = CfEnterpriseOptions();
