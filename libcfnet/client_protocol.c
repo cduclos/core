@@ -66,7 +66,7 @@ int TryTLS(ConnectionInfo *connection)
     if (strcmp(buffer, ACK) == 0)
     {
         Log(LOG_LEVEL_DEBUG, "TLS negotiation accepted, starting TLS connection");
-        int sd = connection_>physical.sd;
+        int sd = connection->physical.sd;
         connection->physical.tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
         connection->physical.tls->method = TLSv1_server_method();
         connection->physical.tls->context = SSL_CTX_new(connection->physical.tls->method);
