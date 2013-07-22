@@ -771,8 +771,16 @@ int CopyRegularFileNet(char *source, char *new, off_t size, AgentConnection *con
         }
 
         /* Stage C1 - receive */
+        if (CFEngine_Classic == conn->connection.type)
+        {
+            n_read = RecvSocketStream(conn->connection.physical.sd, buf, toget);
+        }
+        else if (CFEngine_TLS == conn->connection.type)
+        {
+            n_read = ReceiveTLS(conn->connection.physical.tls->ssl, buf, toget);
+        }
 
-        if ((n_read = RecvSocketStream(conn->connection.physical.sd, buf, toget)) == -1)
+        if (n_read == -1)
         {
             /* This may happen on race conditions,
              * where the file has shrunk since we asked for its size in SYNCH ... STAT source */
