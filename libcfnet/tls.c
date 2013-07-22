@@ -62,6 +62,10 @@ int ServerStartTLS(ConnectionInfo *connection)
         free (tlsInfo);
         return -1;
     }
+    else
+    {
+        Log(LOG_LEVEL_CRIT, "SSL Context created");
+    }
     /*
      * Initialize our certificate
      */
@@ -71,6 +75,10 @@ int ServerStartTLS(ConnectionInfo *connection)
         SSL_CTX_free(tlsInfo->context);
         free (tlsInfo);
         return -1;
+    }
+    else
+    {
+        Log(LOG_LEVEL_CRIT, "SSL Certificate loaded");
     }
     /*
      * Initialize the key attached to the certificate
@@ -82,6 +90,10 @@ int ServerStartTLS(ConnectionInfo *connection)
         free (tlsInfo);
         return -1;
     }
+    else
+    {
+        Log(LOG_LEVEL_CRIT, "SSL key loaded");
+    }
     /*
      * Check that the key and certificate matches
      */
@@ -89,6 +101,10 @@ int ServerStartTLS(ConnectionInfo *connection)
     {
         Log(LOG_LEVEL_CRIT, "Certificate and private key do not match");
         return -1;
+    }
+    else
+    {
+        Log(LOG_LEVEL_CRIT, "SSL key and certificate match");
     }
     /*
      * Continue the TLS negotiation.
@@ -103,6 +119,10 @@ int ServerStartTLS(ConnectionInfo *connection)
         free (tlsInfo);
         return -1;
     }
+    else
+    {
+        Log(LOG_LEVEL_CRIT, "SSL object created");
+    }
 
     /*
      * Now we are ready to tell the client to try the TLS initialization.
@@ -116,6 +136,10 @@ int ServerStartTLS(ConnectionInfo *connection)
          * way to bring down the connection.
          */
         return -1;
+    }
+    else
+    {
+        Log(LOG_LEVEL_CRIT, "Sent reply to client");
     }
 
     SSL_set_fd(tlsInfo->ssl, sd);
