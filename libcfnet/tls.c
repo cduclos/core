@@ -38,35 +38,43 @@ int ServerStartTLS(ConnectionInfo *connection)
     /*
      * We prepare everything before sending the ACK
      */
-    int sd = connection->physical.sd;
-    connection->physical.tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
-    connection->physical.tls->method = TLSv1_server_method();
-    connection->physical.tls->context = SSL_CTX_new(connection->physical.tls->method);
 
-    if (!connection->physical.tls->context)
+    /*
+     * Before using OpenSSL calls we need to make sure that everything is in place.
+     */
+    SSL_library_init();
+    SSL_load_error_strings();
+    /*
+     * Now we can use OpenSSL calls.
+     */
+    int sd = connection->physical.sd;
+    TLSInfo *tlsInfo = (TLSInfo *)xmalloc(sizeof(TLSInfo));
+    tlsInfo->method = TLSv1_server_method();
+    tlsInfo->context = SSL_CTX_new(tlsInfo->method);
+
+    if (!tlsInfo->context)
     {
+        ERR_print_errors_fp(stderr);
         Log(LOG_LEVEL_CRIT, "Unable to create the SSL context");
-        free (connection->physical.tls);
+        free (tlsInfo);
         return -1;
     }
 
-    connection->physical.tls->ssl = SSL_new(connection->physical.tls->context);
+    tlsInfo->ssl = SSL_new(tlsInfo->context);
 
-    if (!connection->physical.tls->ssl)
+    if (!tlsInfo->ssl)
     {
+        ERR_print_errors_fp(stderr);
         Log(LOG_LEVEL_CRIT, "Unable to create the SSL object");
-        SSL_CTX_free (connection->physical.tls->context);
-        free (connection->physical.tls);
+        SSL_CTX_free (tlsInfo->context);
+        free (tlsInfo);
         return -1;
     }
 
     /*
      * Now we are ready to tell the client to try the TLS initialization.
      */
-    ConnectionInfo info;
-    info.type = CFEngine_Classic;
-    info.physical.sd = sd;
-    result = SendTransaction(&info, buffer, 0, CF_DONE);
+    result = SendTransaction(connection, buffer, 0, CF_DONE);
     if (result == -1)
     {
         Log(LOG_LEVEL_ERR, "Unable to send transaction, aborting connection. (send: %s)", GetErrorStr());
@@ -74,22 +82,23 @@ int ServerStartTLS(ConnectionInfo *connection)
          * It is not as easy as closing the socket. We need to come up with a proper
          * way to bring down the connection.
          */
+        return -1;
     }
 
-    SSL_set_fd(connection->physical.tls->ssl, sd);
+    SSL_set_fd(tlsInfo->ssl, sd);
 
     /*
      * Now we wait for the client to send us the TLS request.
      */
     int total_tries = 0;
     do {
-        result = SSL_accept(connection->physical.tls->ssl);
+        result = SSL_accept(tlsInfo->ssl);
         if (result <= 0)
         {
             /*
              * Identify the problem and if possible try to fix it.
              */
-            int error = SSL_get_error(connection->physical.tls->ssl, result);
+            int error = SSL_get_error(tlsInfo->ssl, result);
             if ((SSL_ERROR_WANT_WRITE == error) || (SSL_ERROR_WANT_READ == error))
             {
                 Log(LOG_LEVEL_DEBUG, "Recoverable error in TLS handshake, trying to fix it");
@@ -128,9 +137,9 @@ int ServerStartTLS(ConnectionInfo *connection)
                  * Unrecoverable error
                  */
                 Log(LOG_LEVEL_DEBUG, "Unrecoverable error in TLS handshake (error: %d)", error);
-                SSL_free (connection->physical.tls->ssl);
-                SSL_CTX_free (connection->physical.tls->context);
-                free (connection->physical.tls);
+                SSL_free (tlsInfo->ssl);
+                SSL_CTX_free (tlsInfo->context);
+                free (tlsInfo);
                 return -1;
             }
         }
@@ -141,6 +150,7 @@ int ServerStartTLS(ConnectionInfo *connection)
              */
             Log (LOG_LEVEL_INFO, "TLS connection established");
             connection->type = CFEngine_TLS;
+            connection->physical.tls = tlsInfo;
             break;
         }
         ++total_tries;
