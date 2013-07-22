@@ -454,7 +454,7 @@ static int CFEngine_Classic_Protocol(EvalContext *ctx, ServerConnectionState *co
         return false;
     }
 
-    Log(LOG_LEVEL_DEBUG, "Received: [%s] on socket %d", recvbuffer, conn->sd_reply);
+    Log(LOG_LEVEL_CRIT, "Received: [%s] on socket %d", recvbuffer, conn->sd_reply);
 
     /* Don't process request if we're signalled to exit. */
     if (IsPendingTermination())
