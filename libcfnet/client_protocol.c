@@ -56,7 +56,7 @@ int TryTLS(ConnectionInfo *connection)
     char buffer[CF_BUFSIZE];
     int result = 0;
 
-    result = SendTransaction(connection, STARTTLS, strlen(STARTTLS), CF_MORE);
+    result = SendTransaction(connection, STARTTLS, strlen(STARTTLS), CF_DONE);
     if (result < 0)
     {
         Log(LOG_LEVEL_DEBUG, "Failed to start TLS");

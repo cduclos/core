@@ -66,7 +66,7 @@ int ServerStartTLS(ConnectionInfo *connection)
     ConnectionInfo info;
     info.type = CFEngine_Classic;
     info.physical.sd = sd;
-    result = SendTransaction(&info, buffer, 0, CF_MORE);
+    result = SendTransaction(&info, buffer, 0, CF_DONE);
     if (result == -1)
     {
         Log(LOG_LEVEL_ERR, "Unable to send transaction, aborting connection. (send: %s)", GetErrorStr());
