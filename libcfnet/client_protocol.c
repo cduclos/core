@@ -76,40 +76,40 @@ int TryTLS(ConnectionInfo *connection)
     {
         Log(LOG_LEVEL_CRIT, "TLS negotiation accepted, starting TLS connection");
         int sd = connection->physical.sd;
-        connection->physical.tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
-        connection->physical.tls->method = TLSv1_server_method();
-        connection->physical.tls->context = SSL_CTX_new(connection->physical.tls->method);
+        TLSInfo *tlsInfo = (TLSInfo *)xmalloc(sizeof(TLSInfo));
+        tlsInfo->method = TLSv1_client_method();
+        tlsInfo->context = SSL_CTX_new(tlsInfo->method);
 
-        if (!connection->physical.tls->context)
+        if (!tlsInfo->context)
         {
             Log(LOG_LEVEL_INFO, "Unable to create the SSL context");
-            free (connection->physical.tls);
+            free (tlsInfo);
             return -1;
         }
 
-        connection->physical.tls->ssl = SSL_new(connection->physical.tls->context);
+        tlsInfo->ssl = SSL_new(tlsInfo->context);
 
-        if (!connection->physical.tls->ssl)
+        if (!tlsInfo->ssl)
         {
             Log(LOG_LEVEL_INFO, "Unable to create the SSL object");
-            SSL_CTX_free (connection->physical.tls->context);
-            free (connection->physical.tls);
+            SSL_CTX_free (tlsInfo->context);
+            free (tlsInfo);
             return -1;
         }
-        SSL_set_fd(connection->physical.tls->ssl, sd);
+        SSL_set_fd(tlsInfo->ssl, sd);
 
         /*
          * Now we send the TLS request to the server
          */
         int total_tries = 0;
         do {
-            result = SSL_connect(connection->physical.tls->ssl);
+            result = SSL_connect(tlsInfo->ssl);
             if (result <= 0)
             {
                 /*
                  * Identify the problem and if possible try to fix it.
                  */
-                int error = SSL_get_error(connection->physical.tls->ssl, result);
+                int error = SSL_get_error(tlsInfo->ssl, result);
                 if ((SSL_ERROR_WANT_WRITE == error) || (SSL_ERROR_WANT_READ == error))
                 {
                     Log(LOG_LEVEL_DEBUG, "Recoverable error in TLS handshake, trying to fix it");
@@ -148,9 +148,9 @@ int TryTLS(ConnectionInfo *connection)
                      * Unrecoverable error
                      */
                     Log(LOG_LEVEL_DEBUG, "Unrecoverable error in TLS handshake (error: %d)", error);
-                    SSL_free (connection->physical.tls->ssl);
-                    SSL_CTX_free (connection->physical.tls->context);
-                    free (connection->physical.tls);
+                    SSL_free (tlsInfo->ssl);
+                    SSL_CTX_free (tlsInfo->context);
+                    free (tlsInfo);
                     return -1;
                 }
             }
@@ -161,6 +161,7 @@ int TryTLS(ConnectionInfo *connection)
                  */
                 Log (LOG_LEVEL_INFO, "TLS connection established");
                 connection->type = CFEngine_TLS;
+                connection->physical.tls = tlsInfo;
                 break;
             }
             ++total_tries;
