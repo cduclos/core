@@ -28,6 +28,9 @@
 #include "logging.h"
 #include "misc_lib.h"
 
+#define RSA_SERVER_CERT "server.crt"
+#define RSA_SERVER_KEY "server.key"
+
 int SendTransaction(ConnectionInfo *connection, char *buffer, int len, char status);
 int ServerStartTLS(ConnectionInfo *connection)
 {
@@ -59,7 +62,37 @@ int ServerStartTLS(ConnectionInfo *connection)
         free (tlsInfo);
         return -1;
     }
-
+    /*
+     * Initialize our certificate
+     */
+    if (SSL_CTX_use_certificate_file(tlsInfo->context, RSA_SERVER_CERT, SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(tlsInfo->context);
+        free (tlsInfo);
+        return -1;
+    }
+    /*
+     * Initialize the key attached to the certificate
+     */
+    if (SSL_CTX_use_PrivateKey_file(tlsInfo->context, RSA_SERVER_KEY, SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(tlsInfo->context);
+        free (tlsInfo);
+        return -1;
+    }
+    /*
+     * Check that the key and certificate matches
+     */
+    if (!SSL_CTX_check_private_key(tlsInfo->context))
+    {
+        Log(LOG_LEVEL_CRIT, "Certificate and private key do not match");
+        return -1;
+    }
+    /*
+     * Continue the TLS negotiation.
+     */
     tlsInfo->ssl = SSL_new(tlsInfo->context);
 
     if (!tlsInfo->ssl)
