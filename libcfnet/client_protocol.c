@@ -64,6 +64,15 @@ int TryTLS(ConnectionInfo *connection)
     /*
      * Continue with the initialization.
      */
+    if (CFEngine_TLS == connection->type)
+    {
+        Log(LOG_LEVEL_ERR, "We are already on TLS mode, skipping initialization");
+        return 0;
+    }
+    else
+    {
+        Log(LOG_LEVEL_CRIT, "Using classic mode, trying to start TLS");
+    }
     result = SendTransaction(connection, STARTTLS, strlen(STARTTLS), CF_DONE);
     if (result < 0)
     {
