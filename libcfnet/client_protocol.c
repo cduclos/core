@@ -56,6 +56,14 @@ int TryTLS(ConnectionInfo *connection)
     char buffer[CF_BUFSIZE];
     int result = 0;
 
+    /*
+     * Load OpenSSL in case it is not already loaded.
+     */
+    SSL_library_init();
+    SSL_load_error_strings();
+    /*
+     * Continue with the initialization.
+     */
     result = SendTransaction(connection, STARTTLS, strlen(STARTTLS), CF_DONE);
     if (result < 0)
     {
