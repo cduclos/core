@@ -158,6 +158,7 @@ int TryTLS(ConnectionInfo *connection)
                     /*
                      * Unrecoverable error
                      */
+                    SSL_get_error(tlsInfo->ssl, error);
                     Log(LOG_LEVEL_ERR, "Unrecoverable error in TLS handshake (error: %d)", error);
                     SSL_free (tlsInfo->ssl);
                     SSL_CTX_free (tlsInfo->context);
