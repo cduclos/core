@@ -50,7 +50,7 @@ int TryTLS(ConnectionInfo *connection);
  */
 int TryTLS(ConnectionInfo *connection)
 {
-    Log (LOG_LEVEL_DEBUG, "Trying to enable TLS");
+    Log (LOG_LEVEL_CRIT, "Trying to enable TLS");
     char STARTTLS[] = "STARTTLS";
     char ACK[] = "ACK";
     char buffer[CF_BUFSIZE];
@@ -67,13 +67,14 @@ int TryTLS(ConnectionInfo *connection)
     result = SendTransaction(connection, STARTTLS, strlen(STARTTLS), CF_DONE);
     if (result < 0)
     {
-        Log(LOG_LEVEL_DEBUG, "Failed to start TLS");
+        Log(LOG_LEVEL_CRIT, "Failed to start TLS");
         return -1;
     }
     result = ReceiveTransaction(connection, buffer, NULL);
+    Log(LOG_LEVEL_CRIT, "Received: [%s]", buffer);
     if (strcmp(buffer, ACK) == 0)
     {
-        Log(LOG_LEVEL_DEBUG, "TLS negotiation accepted, starting TLS connection");
+        Log(LOG_LEVEL_CRIT, "TLS negotiation accepted, starting TLS connection");
         int sd = connection->physical.sd;
         connection->physical.tls = (TLSInfo *)xmalloc(sizeof(TLSInfo));
         connection->physical.tls->method = TLSv1_server_method();
@@ -167,10 +168,10 @@ int TryTLS(ConnectionInfo *connection)
     }
     else
     {
-        Log(LOG_LEVEL_DEBUG, "Wrong server reply (%s)", buffer);
+        Log(LOG_LEVEL_CRIT, "Wrong server reply (%s)", buffer);
         return -1;
     }
-    Log(LOG_LEVEL_DEBUG, "TLS enabled");
+    Log(LOG_LEVEL_CRIT, "TLS enabled");
     return 0;
 }
 
