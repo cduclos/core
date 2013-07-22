@@ -164,6 +164,7 @@ int SendTLS(SSL *ssl, const char *buffer, int length)
     {
         return -1;
     }
+    Log(LOG_LEVEL_CRIT, "Trying to send %d bytes using TLS", length);
     /*
      * Technically speaking, the buffer is either sent completely or not sent at all.
      * Therefore it is not needed to count how many bytes we have sent, OpenSSL does that
@@ -176,7 +177,7 @@ int SendTLS(SSL *ssl, const char *buffer, int length)
         if (sent <= 0)
         {
             int error = SSL_get_error(ssl, sent);
-            Log(LOG_LEVEL_DEBUG, "SSL_write failed, retrying (tries: %d)", total_tries);
+            Log(LOG_LEVEL_ERR, "SSL_write failed, retrying (tries: %d)", total_tries);
             if ((SSL_ERROR_WANT_READ == error) || (SSL_ERROR_WANT_WRITE == error))
             {
                 /*
@@ -186,7 +187,7 @@ int SendTLS(SSL *ssl, const char *buffer, int length)
                 int fd = SSL_get_fd(ssl);
                 if (fd < 0)
                 {
-                    Log(LOG_LEVEL_DEBUG, "Could not get fd from SSL");
+                    Log(LOG_LEVEL_ERR, "Could not get fd from SSL");
                     return -1;
                 }
                 fd_set wfds;
@@ -209,7 +210,7 @@ int SendTLS(SSL *ssl, const char *buffer, int length)
                     }
                     else
                     {
-                        Log(LOG_LEVEL_DEBUG, "select(2) timed out, retrying (tries: %d)", tries);
+                        Log(LOG_LEVEL_ERR, "select(2) timed out, retrying (tries: %d)", tries);
                         ++tries;
                     }
                 } while (tries <= DEFAULT_TLS_TRIES);
@@ -219,7 +220,7 @@ int SendTLS(SSL *ssl, const char *buffer, int length)
                 /*
                  * Any other error is fatal.
                  */
-                Log(LOG_LEVEL_DEBUG, "Fatal error on SSL_write (error: %d)", error);
+                Log(LOG_LEVEL_ERR, "Fatal error on SSL_write (error: %d)", error);
                 return -1;
             }
         }
@@ -228,7 +229,7 @@ int SendTLS(SSL *ssl, const char *buffer, int length)
             /*
              * We sent more than 0 bytes so we are done.
              */
-            Log(LOG_LEVEL_DEBUG, "Sent %d bytes using TLS", sent);
+            Log(LOG_LEVEL_ERR, "Sent %d bytes using TLS", sent);
             break;
         }
         ++total_tries;
@@ -242,6 +243,7 @@ int ReceiveTLS(SSL *ssl, char *buffer, int length)
     {
         return -1;
     }
+    Log(LOG_LEVEL_CRIT, "Trying to read %d bytes using TLS", length);
     int total_tries = 0;
     int received = 0;
     do {
@@ -249,7 +251,7 @@ int ReceiveTLS(SSL *ssl, char *buffer, int length)
         if (received <= 0)
         {
             int error = SSL_get_error(ssl, received);
-            Log(LOG_LEVEL_DEBUG, "SSL_read failed, retrying (tries: %d)", total_tries);
+            Log(LOG_LEVEL_ERR, "SSL_read failed, retrying (tries: %d)", total_tries);
             if ((SSL_ERROR_WANT_READ == error) || (SSL_ERROR_WANT_WRITE == error))
             {
                 /*
@@ -259,7 +261,7 @@ int ReceiveTLS(SSL *ssl, char *buffer, int length)
                 int fd = SSL_get_fd(ssl);
                 if (fd < 0)
                 {
-                    Log(LOG_LEVEL_DEBUG, "Could not get fd from SSL");
+                    Log(LOG_LEVEL_ERR, "Could not get fd from SSL");
                     return -1;
                 }
                 fd_set rfds;
@@ -282,7 +284,7 @@ int ReceiveTLS(SSL *ssl, char *buffer, int length)
                     }
                     else
                     {
-                        Log(LOG_LEVEL_DEBUG, "select(2) timed out, retrying (tries: %d)", tries);
+                        Log(LOG_LEVEL_ERR, "select(2) timed out, retrying (tries: %d)", tries);
                         ++tries;
                     }
                 } while (tries <= DEFAULT_TLS_TRIES);
@@ -292,7 +294,7 @@ int ReceiveTLS(SSL *ssl, char *buffer, int length)
                 /*
                  * Any other error is fatal.
                  */
-                Log(LOG_LEVEL_DEBUG, "Fatal error on SSL_read (error: %d)", error);
+                Log(LOG_LEVEL_ERR, "Fatal error on SSL_read (error: %d)", error);
                 return -1;
             }
         }
@@ -301,7 +303,7 @@ int ReceiveTLS(SSL *ssl, char *buffer, int length)
             /*
              * We received more than 0 bytes so we are done.
              */
-            Log(LOG_LEVEL_DEBUG, "Received %d bytes using TLS", received);
+            Log(LOG_LEVEL_ERR, "Received %d bytes using TLS", received);
             break;
         }
         ++total_tries;

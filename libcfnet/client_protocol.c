@@ -112,16 +112,18 @@ int TryTLS(ConnectionInfo *connection)
          */
         int total_tries = 0;
         do {
+            Log(LOG_LEVEL_CRIT, "Sending OpenSSL TLS request");
             result = SSL_connect(tlsInfo->ssl);
             if (result <= 0)
             {
+                Log(LOG_LEVEL_CRIT, "Problems with TLS negotiation, trying again");
                 /*
                  * Identify the problem and if possible try to fix it.
                  */
                 int error = SSL_get_error(tlsInfo->ssl, result);
                 if ((SSL_ERROR_WANT_WRITE == error) || (SSL_ERROR_WANT_READ == error))
                 {
-                    Log(LOG_LEVEL_DEBUG, "Recoverable error in TLS handshake, trying to fix it");
+                    Log(LOG_LEVEL_ERR, "Recoverable error in TLS handshake, trying to fix it");
                     /*
                      * We can try to fix this.
                      * This error means that there was not enough data in the buffer, using select
@@ -146,7 +148,7 @@ int TryTLS(ConnectionInfo *connection)
                         }
                         else
                         {
-                            Log(LOG_LEVEL_DEBUG, "select(2) timed out, retrying (tries: %d)", tries);
+                            Log(LOG_LEVEL_ERR, "select(2) timed out, retrying (tries: %d)", tries);
                             ++tries;
                         }
                     } while (tries <= DEFAULT_TLS_TRIES);
@@ -156,7 +158,7 @@ int TryTLS(ConnectionInfo *connection)
                     /*
                      * Unrecoverable error
                      */
-                    Log(LOG_LEVEL_DEBUG, "Unrecoverable error in TLS handshake (error: %d)", error);
+                    Log(LOG_LEVEL_ERR, "Unrecoverable error in TLS handshake (error: %d)", error);
                     SSL_free (tlsInfo->ssl);
                     SSL_CTX_free (tlsInfo->context);
                     free (tlsInfo);
@@ -168,7 +170,7 @@ int TryTLS(ConnectionInfo *connection)
                 /*
                  * TLS channel established, start talking!
                  */
-                Log (LOG_LEVEL_INFO, "TLS connection established");
+                Log (LOG_LEVEL_CRIT, "TLS connection established");
                 connection->type = CFEngine_TLS;
                 connection->physical.tls = tlsInfo;
                 break;
