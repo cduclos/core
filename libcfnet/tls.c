@@ -28,8 +28,8 @@
 #include "logging.h"
 #include "misc_lib.h"
 
-#define RSA_SERVER_CERT "server.crt"
-#define RSA_SERVER_KEY "server.key"
+#define RSA_SERVER_CERT "/var/cfengine/server.crt"
+#define RSA_SERVER_KEY "/var/cfengine/server.key"
 
 int SendTransaction(ConnectionInfo *connection, char *buffer, int len, char status);
 int ServerStartTLS(ConnectionInfo *connection)
