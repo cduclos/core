@@ -119,6 +119,11 @@ typedef struct
     char remote_keyhash[EVP_MAX_MD_SIZE];       /* key hash */
     char remote_keyhash_str[EVP_MAX_MD_SIZE*4]; /* key hash as a SHA=... string */
 } ConnectionInfo;
+/* Macros to ease the discovery of the type of protocol type */
+#define CF_PROTOCOL_IS_TLS(x) \
+    (x.type == CF_PROTOCOL_TLS) 
+#define CF_PROTOCOL_IS_CLASSIC(x) \
+    (x.type == CF_PROTOCOL_CLASSIC) 
 
 typedef struct
 {

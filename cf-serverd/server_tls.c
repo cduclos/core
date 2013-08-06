@@ -380,8 +380,10 @@ typedef enum
     PROTOCOL_COMMAND_VAR_SECURE,
     PROTOCOL_COMMAND_CONTEXT,
     PROTOCOL_COMMAND_CONTEXT_SECURE,
+    PROTOCOL_COMMAND_QUERY,
     PROTOCOL_COMMAND_QUERY_SECURE,
     PROTOCOL_COMMAND_CALL_ME_BACK,
+    PROTOCOL_COMMAND_CALL_ME_BACK_SECURE,
     PROTOCOL_COMMAND_BAD
 } ProtocolCommandNew;
 
@@ -398,7 +400,9 @@ static const char *PROTOCOL_NEW[PROTOCOL_COMMAND_BAD + 1] =
     "SVAR",
     "CONTEXT",
     "SCONTEXT",
+    "QUERY",
     "SQUERY",
+    "CALLBACK",
     "SCALLBACK",
     NULL
 };
@@ -815,23 +819,46 @@ bool BusyWithNewProtocol(EvalContext *ctx, ServerConnectionState *conn)
 
         break;
 
-    case PROTOCOL_COMMAND_CALL_ME_BACK:
+    case PROTOCOL_COMMAND_QUERY:
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+            return true;
+        }
+
+        if (!LiteralAccessControl(ctx, recvbuffer, conn, true))
+        {
+            Log(LOG_LEVEL_INFO, "Query access failure");
+            RefuseAccess(conn, 0, recvbuffer);
+            return false;
+        }
+
+        if (GetServerQuery(conn, recvbuffer))
+        {
+            return true;
+        }
+
+        break;
+
+    case PROTOCOL_COMMAND_CALL_ME_BACK_SECURE:
 
         sscanf(recvbuffer, "SCALLBACK %u", &len);
 
         if ((len >= sizeof(out)) || (received != (len + CF_PROTO_OFFSET)))
         {
-            Log(LOG_LEVEL_INFO, "Decrypt error CALL_ME_BACK");
-            RefuseAccess(conn, 0, "decrypt error CALL_ME_BACK");
+            Log(LOG_LEVEL_INFO, "Decrypt error CALL_ME_BACK_SECURE");
+            RefuseAccess(conn, 0, "decrypt error CALL_ME_BACK_SECURE");
             return true;
         }
 
         memcpy(out, recvbuffer + CF_PROTO_OFFSET, len);
         plainlen = DecryptString(conn->encryption_type, out, recvbuffer, conn->session_key, len);
 
-        if (strncmp(recvbuffer, "CALL_ME_BACK collect_calls", strlen("CALL_ME_BACK collect_calls")) != 0)
+        if (strncmp(recvbuffer, "CALL_ME_BACK_SECURE collect_calls", strlen("CALL_ME_BACK_SECURE collect_calls")) != 0)
         {
-            Log(LOG_LEVEL_INFO, "CALL_ME_BACK protocol defect");
+            Log(LOG_LEVEL_INFO, "CALL_ME_BACK_SECURE protocol defect");
             RefuseAccess(conn, 0, "decryption failure");
             return false;
         }
@@ -850,6 +877,9 @@ bool BusyWithNewProtocol(EvalContext *ctx, ServerConnectionState *conn)
             return false;
         }
         return ReceiveCollectCall(conn);
+
+    case PROTOCOL_COMMAND_CALL_ME_BACK:
+        break;
 
     case PROTOCOL_COMMAND_BAD:
         Log(LOG_LEVEL_WARNING, "Unexpected protocol command: %s", recvbuffer);
