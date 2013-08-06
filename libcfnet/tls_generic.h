@@ -22,16 +22,19 @@
   included file COSL.txt.
 */
 
-#ifndef CFENGINE_CLIENT_PROTOCOL_H
-#define CFENGINE_CLIENT_PROTOCOL_H
+
+#ifndef CFENGINE_TLS_GENERIC_H
+#define CFENGINE_TLS_GENERIC_H
+
 
 #include "cfnet.h"
 
 
-int IdentifyAgent(ConnectionInfo *connection);
-int AuthenticateAgent(AgentConnection *conn, bool trust_key);
-int BadProtoReply(char *buf);
-int OKProtoReply(char *buf);
-int FailedProtoReply(char *buf);
+int TLSVerifyCallback(X509_STORE_CTX *ctx, void *arg);
+int TLSVerifyPeer(ConnectionInfo *conn_info, const char *remoteip, const char *username);
+
+int TLSSend(SSL *ssl, const char *buffer, int length);
+int TLSRecv(SSL *ssl, char *buffer, int length);
+int TLSRecvLine(SSL *ssl, char *line, size_t line_size);
 
 #endif

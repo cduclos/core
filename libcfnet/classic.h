@@ -22,16 +22,11 @@
   included file COSL.txt.
 */
 
-#ifndef CFENGINE_CLIENT_PROTOCOL_H
-#define CFENGINE_CLIENT_PROTOCOL_H
-
-#include "cfnet.h"
+#ifndef CLASSIC_H
+#define CLASSIC_H
 
 
-int IdentifyAgent(ConnectionInfo *connection);
-int AuthenticateAgent(AgentConnection *conn, bool trust_key);
-int BadProtoReply(char *buf);
-int OKProtoReply(char *buf);
-int FailedProtoReply(char *buf);
+int RecvSocketStream(int sd, char *buffer, int toget);
+int SendSocketStream(int sd, char *buffer, int tosend);
 
-#endif
+#endif // CLASSIC_H

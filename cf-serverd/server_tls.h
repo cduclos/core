@@ -22,16 +22,29 @@
   included file COSL.txt.
 */
 
-#ifndef CFENGINE_CLIENT_PROTOCOL_H
-#define CFENGINE_CLIENT_PROTOCOL_H
 
-#include "cfnet.h"
+#ifndef CFENGINE_SERVER_TLS_H
+#define CFENGINE_SERVER_TLS_H
 
 
-int IdentifyAgent(ConnectionInfo *connection);
-int AuthenticateAgent(AgentConnection *conn, bool trust_key);
-int BadProtoReply(char *buf);
-int OKProtoReply(char *buf);
-int FailedProtoReply(char *buf);
+#include "platform.h"
 
-#endif
+#include "cf3.defs.h"                              /* EvalContext */
+#include "cfnet.h"                                 /* ConnectionInfo */
+#include "server.h"                                /* ServerConnectionState */
+
+
+/* The only protocol we support inside TLS, for now... */
+#define SERVER_PROTOCOL_VERSION 1
+
+
+bool ServerTLSInitialize();
+int ServerStartTLS(ConnectionInfo *conn_info);
+int ServerNegotiateProtocol(const ConnectionInfo *conn_info);
+int ServerIdentifyClient(const ConnectionInfo *conn_info,
+                         char *username, size_t username_size);
+int ServerSendWelcome(const ServerConnectionState *conn);
+bool BusyWithNewProtocol(EvalContext *ctx, ServerConnectionState *conn);
+
+
+#endif  /* CFENGINE_SERVER_TLS_H */
