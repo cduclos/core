@@ -1023,43 +1023,8 @@ static int BusyWithClassicConnection(EvalContext *ctx, ServerConnectionState *co
 
     case PROTOCOL_COMMAND_CALL_ME_BACK:
 
-        sscanf(recvbuffer, "SCALLBACK %u", &len);
-
-        if ((len >= sizeof(out)) || (received != (len + CF_PROTO_OFFSET)))
-        {
-            Log(LOG_LEVEL_INFO, "Decrypt error CALL_ME_BACK");
-            RefuseAccess(conn, 0, "decrypt error CALL_ME_BACK");
-            return true;
-        }
-
-        memcpy(out, recvbuffer + CF_PROTO_OFFSET, len);
-        plainlen = DecryptString(conn->encryption_type, out, recvbuffer, conn->session_key, len);
-
-        if (strncmp(recvbuffer, "CALL_ME_BACK collect_calls", strlen("CALL_ME_BACK collect_calls")) != 0)
-        {
-            Log(LOG_LEVEL_INFO, "CALL_ME_BACK protocol defect");
-            RefuseAccess(conn, 0, "decryption failure");
-            return false;
-        }
-
-        if (!conn->id_verified)
-        {
-            Log(LOG_LEVEL_INFO, "ID not verified");
-            RefuseAccess(conn, 0, recvbuffer);
-            return true;
-        }
-
-        if (!LiteralAccessControl(ctx, recvbuffer, conn, true))
-        {
-            Log(LOG_LEVEL_INFO, "Query access failure");
-            RefuseAccess(conn, 0, recvbuffer);
-            return false;
-        }
-
-        if (ReceiveCollectCall(conn))
-        {
-            return true;
-        }
+        Log(LOG_LEVEL_ERR, "Call Collect is only supported over TLS");
+        return false;
 
     case PROTOCOL_COMMAND_AUTH:
     case PROTOCOL_COMMAND_CONTEXTS:
