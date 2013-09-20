@@ -89,8 +89,8 @@ Item *IPADDRESSES = NULL;
 /*                                                                 */
 /*******************************************************************/
 
-HashMethod CF_DEFAULT_DIGEST;
-int CF_DEFAULT_DIGEST_LEN;
+HashMethod CF_DEFAULT_DIGEST = HASH_METHOD_NONE;
+int CF_DEFAULT_DIGEST_LEN = -1;
 
 /***********************************************************/
 

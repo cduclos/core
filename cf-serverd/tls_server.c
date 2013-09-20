@@ -256,7 +256,7 @@ int ServerNegotiateProtocol(const ConnectionInfo *conn_info)
     if (ret <= 0)
     {
         Log(LOG_LEVEL_ERR,
-            "Client closed connection early! He probably does not trust our key...");
+            "Client closed connection early! He probably does not trust our key");
         return -1;
     }
 
