@@ -1487,6 +1487,7 @@ GenericAgentConfig *GenericAgentConfigNewDefault(AgentType agent_type)
     config->heap_negated = NULL;
 
     config->agent_specific.agent.bootstrap_policy_server = NULL;
+    config->agent_specific.agent.check_for_upgrades = false;
 
     switch (agent_type)
     {

@@ -47,4 +47,6 @@ ENTERPRISE_VOID_FUNC_0ARG_DECLARE(void, CleanReportBookFilterSet);
 
 ENTERPRISE_VOID_FUNC_1ARG_DECLARE(void, FprintAvahiCfengineTag, FILE *, fp);
 
+ENTERPRISE_VOID_FUNC_2ARG_DECLARE(void, CheckForUpdate, ServerConnectionState *, connection, char *, recvbuffer);
+
 #endif

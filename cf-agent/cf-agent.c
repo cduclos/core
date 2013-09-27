@@ -191,6 +191,7 @@ static const struct option OPTIONS[] =
     {"legacy-output", no_argument, 0, 'l'},
     {"color", optional_argument, 0, 'C'},
     {"no-extensions", no_argument, 0, 'E'},
+    {"update", no_argument, 0, 'u'},
     {NULL, 0, 0, '\0'}
 };
 
@@ -212,6 +213,7 @@ static const char *HINTS[] =
     "Use legacy output format",
     "Enable colorized output. Possible values: 'always', 'auto', 'never'. If option is used, the default value is 'auto'",
     "Disable extension loading (used while upgrading)",
+    "Asks the server about upgrades and downloads the packages)",
     NULL
 };
 
@@ -227,6 +229,18 @@ int main(int argc, char *argv[])
     GenericAgentConfigApply(ctx, config);
 
     GenericAgentDiscoverContext(ctx, config);
+
+    /* Check if we need to check for upgrades */
+    if (config->agent_specific.agent.check_for_upgrades)
+    {
+        /*
+         * This is a very special situation, we will not run any policies
+         * after this. We contact the server and ask for upgrades, if
+         * upgrades are found we need to download the file and then tell
+         * cf-update to run and upgrade us.
+         */
+        exit(0);
+    }
 
     Policy *policy = NULL;
     if (GenericAgentCheckPolicy(config, ALWAYS_VALIDATE))
@@ -304,7 +318,7 @@ static GenericAgentConfig *CheckOpts(EvalContext *ctx, int argc, char **argv)
     char **argv_new = TranslateOldBootstrapOptionsConcatenated(argc_new, argv_tmp);
     FreeStringArray(argc_new, argv_tmp);
 
-    while ((c = getopt_long(argc_new, argv_new, "dvnKIf:D:N:VxMB:b:hlC::E", OPTIONS, NULL)) != EOF)
+    while ((c = getopt_long(argc_new, argv_new, "dvnKIf:D:N:VxMB:b:hlC::Eu", OPTIONS, NULL)) != EOF)
     {
         switch ((char) c)
         {
@@ -467,6 +481,10 @@ static GenericAgentConfig *CheckOpts(EvalContext *ctx, int argc, char **argv)
 
         case 'E':
             extension_libraries_disable();
+            break;
+
+        case 'u':
+            config->agent_specific.agent.check_for_upgrades = true;
             break;
 
         default:

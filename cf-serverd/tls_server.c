@@ -499,6 +499,7 @@ typedef enum
     PROTOCOL_COMMAND_CONTEXT,
     PROTOCOL_COMMAND_QUERY,
     PROTOCOL_COMMAND_CALL_ME_BACK,
+    PROTOCOL_COMMAND_HAVE_UPGRADE,
     PROTOCOL_COMMAND_BAD
 } ProtocolCommandNew;
 
@@ -514,6 +515,7 @@ static const char *PROTOCOL_NEW[PROTOCOL_COMMAND_BAD + 1] =
     "CONTEXT",
     "QUERY",
     "SCALLBACK",
+    "HAVE_UPGRADE",
     NULL
 };
 
@@ -851,6 +853,17 @@ bool BusyWithNewProtocol(EvalContext *ctx, ServerConnectionState *conn)
             return false;
         }
         return ReceiveCollectCall(conn);
+
+    case PROTOCOL_COMMAND_HAVE_UPGRADE:
+
+        if (!conn->id_verified)
+        {
+            Log(LOG_LEVEL_INFO, "ID not verified");
+            RefuseAccess(conn, 0, recvbuffer);
+        }
+        CheckForUpdate(conn, recvbuffer);
+        /* The connection needs to be closed after this */
+        return false;
 
     case PROTOCOL_COMMAND_BAD:
         Log(LOG_LEVEL_WARNING, "Unexpected protocol command: %s", recvbuffer);

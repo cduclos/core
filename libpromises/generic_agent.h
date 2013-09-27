@@ -70,6 +70,7 @@ typedef struct
         struct
         {
             char *bootstrap_policy_server;
+            bool check_for_upgrades;
         } agent;
     } agent_specific;
 
