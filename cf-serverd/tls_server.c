@@ -860,10 +860,11 @@ bool BusyWithNewProtocol(EvalContext *ctx, ServerConnectionState *conn)
         {
             Log(LOG_LEVEL_INFO, "ID not verified");
             RefuseAccess(conn, 0, recvbuffer);
+            return false;
         }
         CheckForUpdate(conn, recvbuffer);
-        /* The connection needs to be closed after this */
-        return false;
+        /* We do not close the connection, just in case the client wants to download the update */
+        return true;
 
     case PROTOCOL_COMMAND_BAD:
         Log(LOG_LEVEL_WARNING, "Unexpected protocol command: %s", recvbuffer);

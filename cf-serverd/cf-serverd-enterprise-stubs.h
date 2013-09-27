@@ -47,6 +47,8 @@ ENTERPRISE_VOID_FUNC_0ARG_DECLARE(void, CleanReportBookFilterSet);
 
 ENTERPRISE_VOID_FUNC_1ARG_DECLARE(void, FprintAvahiCfengineTag, FILE *, fp);
 
+/* These two functions are used for the client upgrade, only available on Enterprise */
+ENTERPRISE_VOID_FUNC_1ARG_DECLARE(void, InitializeUpdates, const char *, configuration_file);
 ENTERPRISE_VOID_FUNC_2ARG_DECLARE(void, CheckForUpdate, ServerConnectionState *, connection, char *, recvbuffer);
 
 #endif

@@ -38,6 +38,10 @@ void DetermineCfenginePort(void);
   @param err Set to 0 on success, -1 no server responce, -2 authentication failure.
   */
 AgentConnection *NewServerConnection(FileCopy fc, bool background, int *err);
+/**
+  @param err Set to 0 on success, -1 no server responce, -2 authentication failure.
+  */
+AgentConnection *ServerConnection(const char *server, FileCopy fc, int *err);
 void DisconnectServer(AgentConnection *conn);
 int cf_remote_stat(char *file, struct stat *buf, char *stattype, bool encrypt, AgentConnection *conn);
 int CompareHashNet(char *file1, char *file2, bool encrypt, AgentConnection *conn);

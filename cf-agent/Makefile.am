@@ -65,7 +65,8 @@ libcf_agent_la_SOURCES = \
         files_select.c files_select.h \
         vercmp_internal.c vercmp_internal.h \
         vercmp.c vercmp.h \
-        verify_packages.c verify_packages.h
+        verify_packages.c verify_packages.h \
+		agent_upgrade.c agent_upgrade.h
 
 if !NT
 libcf_agent_la_SOURCES += nfs.c nfs.h

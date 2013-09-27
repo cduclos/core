@@ -70,6 +70,7 @@ static const struct option OPTIONS[] =
     {"generate-avahi-conf", no_argument, 0, 'A'},
     {"legacy-output", no_argument, 0, 'l'},
     {"color", optional_argument, 0, 'C'},
+    {"upgrade", required_argument, 0, 'u'},
     {NULL, 0, 0, '\0'}
 };
 
@@ -90,6 +91,7 @@ static const char *HINTS[] =
     "Generates avahi configuration file to enable policy server to be discovered in the network",
     "Use legacy output format",
     "Enable colorized output. Possible values: 'always', 'auto', 'never'. If option is used, the default value is 'auto'",
+    "Configuration file containing the upgrade configurations (Enterprise only)",
     NULL
 };
 
@@ -129,7 +131,7 @@ GenericAgentConfig *CheckOpts(int argc, char **argv)
     int c;
     GenericAgentConfig *config = GenericAgentConfigNewDefault(AGENT_TYPE_SERVER);
 
-    while ((c = getopt_long(argc, argv, "dvIKf:D:N:VSxLFMhAlC::", OPTIONS, &optindex)) != EOF)
+    while ((c = getopt_long(argc, argv, "u:dvIKf:D:N:VSxLFMhAlC::", OPTIONS, &optindex)) != EOF)
     {
         switch ((char) c)
         {
@@ -236,6 +238,10 @@ GenericAgentConfig *CheckOpts(int argc, char **argv)
             {
                 exit(EXIT_FAILURE);
             }
+            break;
+
+        case 'u':
+            InitializeUpdates(optarg);
             break;
 
         default:

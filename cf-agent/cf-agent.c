@@ -70,6 +70,7 @@
 #include <bootstrap.h>
 #include <misc_lib.h>
 #include <buffer.h>
+#include <agent_upgrade.h>
 
 #include <mod_common.h>
 
@@ -239,6 +240,7 @@ int main(int argc, char *argv[])
          * upgrades are found we need to download the file and then tell
          * cf-update to run and upgrade us.
          */
+        CheckForUpgrades("ubuntu_12", "x86_64");
         exit(0);
     }
 

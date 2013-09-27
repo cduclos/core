@@ -75,6 +75,11 @@ ENTERPRISE_VOID_FUNC_0ARG_DEFINE_STUB(void, CleanReportBookFilterSet)
     return;
 }
 
+ENTERPRISE_VOID_FUNC_1ARG_DEFINE_STUB(void, InitializeUpdates, const char *, configuration_file)
+{
+    Log(LOG_LEVEL_VERBOSE, "Upgrade is only supported in CFEngine Enterprise");
+}
+
 ENTERPRISE_VOID_FUNC_2ARG_DEFINE_STUB(void, CheckForUpdate, ARG_UNUSED ServerConnectionState *, connection, ARG_UNUSED char *, recvbuffer)
 {
     Log(LOG_LEVEL_VERBOSE, "  Upgrade only supported in the CFEngine Enterprise");

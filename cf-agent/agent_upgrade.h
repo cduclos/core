@@ -25,4 +25,11 @@
 #ifndef AGENT_UPGRADE_H
 #define AGENT_UPGRADE_H
 
+/**
+  @brief This function contacts the server and asks for upgrades.
+
+  @return Returns 0 if successful, -1 in case of error.
+  */
+int CheckForUpgrades(const char *os, const char *architecture);
+
 #endif // AGENT_UPGRADE_H

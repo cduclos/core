@@ -44,9 +44,6 @@ static const int CF_NOSIZE = -1;
 #include <tls_generic.h>              /* TLSSend */
 #include <rlist.h>
 #include <cf-serverd-enterprise-stubs.h>
-#include <map.h>
-
-static Map *updates_available = NULL;
 
 void RefuseAccess(ServerConnectionState *conn, int size, char *errmesg)
 {
@@ -1684,16 +1681,4 @@ int cfscanf(char *in, int len1, int len2, char *out1, char *out2, char *out3)
     out3[len3] = '\0';
 
     return (len1 + len2 + len3 + 2);
-}
-
-int CheckForUpdate(ServerConnectionState *connection, char *recvbuffer)
-{
-    /* Find the configuration */
-    char cfengine_version[128];
-    char system_os[128];
-    char system_architecture[128];
-
-    sscanf(recvbuffer, "HAVE_UPGRADE %127[^\n] %127[^\n] %127[^\n]", cfengine_version, system_os, system_architecture);
-
-    return 0;
 }

@@ -73,10 +73,6 @@ static AgentConnection *GetIdleConnectionToServer(const char *server);
 static bool ServerOffline(const char *server);
 static void FlushFileStream(int sd, int toget);
 static int CacheStat(const char *file, struct stat *statbuf, const char *stattype, AgentConnection *conn);
-/**
-  @param err Set to 0 on success, -1 no server responce, -2 authentication failure.
-  */
-static AgentConnection *ServerConnection(const char *server, FileCopy fc, int *err);
 
 int TryConnect(AgentConnection *conn, struct timeval *tvp, struct sockaddr *cinp, int cinpSz);
 
@@ -312,7 +308,7 @@ int TLSConnect(ConnectionInfo *conn_info, bool trust_server,
 
 /*****************************************************************************/
 
-static AgentConnection *ServerConnection(const char *server, FileCopy fc, int *err)
+AgentConnection *ServerConnection(const char *server, FileCopy fc, int *err)
 {
     AgentConnection *conn;
     int ret;
