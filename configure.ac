@@ -516,6 +516,11 @@ if test "x$ac_cv_sys_large_files" = x1; then
   CPPFLAGS="$CPPFLAGS -D_LARGE_FILES=1"
 fi
 
+AC_CHECK_MEMBER([struct msghdr.msg_control], [AC_DEFINE([HAVE_MSGHDR_MSG_CONTROL], [1], [Define to 1 if modern interface of msghdr])],
+                [AC_DEFINE([HAVE_MSGHDR_ACCRIGHTS], [1], [Define to 1 if old interface of msghdr])],
+                [[#include <sys/types.h>
+                  #include <sys/socket.h>]])
+
 dnl ######################################################################
 dnl Check for libraries
 dnl ######################################################################
