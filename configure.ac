@@ -1241,6 +1241,7 @@ AC_CONFIG_FILES([Makefile
     libcompat/Makefile
     libutils/Makefile
     libutils/config.post.h
+    libicomms/Makefile
     libcfnet/Makefile
     libenv/Makefile
     libpromises/Makefile
