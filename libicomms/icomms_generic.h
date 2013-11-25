@@ -74,16 +74,14 @@ void ICommsInterfaceSetTimeout(ICommsInterface *interface, const int timeout);
 /**
   @brief Writes data using the interface.
   @param interface ICommsInterface to operate on.
-  @param buffer Data to be written.
-  @param length Length of the data.
+  @param message IMessage structure to be transmitted.
   @return The number of bytes written or -1 in case of error.
   */
 int ICommsInterfaceWrite(ICommsInterface *interface, IMessage *message);
 /**
   @brief Reads data using the interface.
   @param interface ICommsInterface to operate on.
-  @param buffer Buffer to store the data read from the interface.
-  @param length Length of the data to be read.
+  @param message New IMessage structure containing the message read from the wire.
   @return The number of bytes read or -1 in case of error.
   */
 int ICommsInterfaceRead(ICommsInterface *interface, IMessage **message);

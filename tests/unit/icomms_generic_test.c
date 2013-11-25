@@ -1,18 +1,55 @@
 #include <test.h>
 #include <icomms_generic.h>
 #include <imessage.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/select.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <wait.h>
 
 static char first_test_string[] = "This is the first test string";
 static char second_test_string[] = "This is the second test string";
 static char server_path[] = "/tmp/imessage_server";
+static char test_file[] = "/tmp/imessage_test_file_XXXXXX";
+static int server_socket = -1;
 
 static int create_server(void)
 {
+    struct sockaddr_un server_address;
+
+    server_socket = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (server_socket < 0)
+    {
+        return -1;
+    }
+    memset(&server_address, 0, sizeof(struct sockaddr_un));
+    server_address.sun_family = AF_UNIX;
+    strncpy(server_address.sun_path, server_path, sizeof(server_address.sun_path)-1);
+
+    if (bind(server_socket, (struct sockaddr *)&server_address,
+             sizeof(struct sockaddr_un)) < 0)
+    {
+        return -1;
+    }
+
+    if (listen(server_socket, 10) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int delete_server(void)
+{
+    if (server_socket > 0)
+    {
+        close (server_socket);
+    }
     return 0;
 }
 
@@ -58,7 +95,62 @@ static void test_message_passing(void)
     else
     {
         /* Parent */
-        create_server();
+        close (channel[0]);
+        /* Create the server */
+        assert_int_equal(0, create_server());
+        /* Tell the child to start */
+        int message = 0;
+        write(channel[1], &message, sizeof(message));
+
+        /* Start accepting connections */
+        fd_set rfds;
+        struct timeval tv;
+
+        FD_ZERO(&rfds);
+        FD_SET(server_socket, &rfds);
+        tv.tv_sec = 10;
+        tv.tv_usec = 0;
+
+        int number = select(channel[1]+1, &rfds, NULL, NULL, &tv);
+        assert_int_equal(1, number);
+
+        /* Accept the connection */
+        struct sockaddr_un client_address;
+        socklen_t client_address_size = sizeof(struct sockaddr_un);
+        int client_socket = accept(server_socket, (struct sockaddr_un *)&client_address,
+                                   &client_address_size);
+        assert_int_not_equal(-1, client_socket);
+
+        /* We are connected, run the test */
+        ICommsInterface *interface = ICommsInterfaceNew(client_socket);
+        int fd = mktemp(test_file);
+        assert_int_not_equal(-1, fd);
+        /* Send the file descriptor to the child process */
+        IMessage *message = IMessageNew(IMessage_ShareOwnership, &fd);
+        assert_int_not_equal(-1, ICommsInterfaceWrite(interface, message));
+
+        /* Wait for the process to be ready with the file descriptor */
+        IMessage *reply = NULL;
+        assert_int_not_equal(-1, ICommsInterfaceRead(interface, &reply));
+        /* Check the reply */
+        int expected_length = strlen(second_test_string);
+        assert_int_equal(expected_length, IMessageDataLength(reply));
+        assert_string_equal(second_test_string, (char *)IMessageDataContent(reply));
+        /* Check the file */
+        assert_int_equal(0, lseek(fd, 0, SEEK_SET));
+        char file_content[128];
+        assert_int_equal(strlen(first_test_string), read(fd, file_content, strlen(first_test_string)));
+        assert_string_equal(file_content, first_test_string);
+        /* Delete the file */
+        close (fd);
+        unlink (test_file);
+        /* Destroy the server */
+        assert_int_equal(0, delete_server());
+        /* Wait for the child process */
+        int status = 0;
+        waitpid(child, &status, 0);
+        assert_true(WIFEXITED(status));
+        assert_int_equal(0, WEXITSTATUS(status));
     }
 }
 
