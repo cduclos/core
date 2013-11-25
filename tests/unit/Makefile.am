@@ -89,7 +89,8 @@ check_PROGRAMS = \
 	mustache_test \
 	class_test \
 	version_test \
-    imessage_test
+    imessage_test \
+    icomms_generic_test
 
 if HAVE_AVAHI_CLIENT
 if HAVE_AVAHI_COMMON
@@ -279,3 +280,8 @@ version_test_SOURCES = version_test.c
 imessage_test_SOURCES = imessage_test.c
 imessage_test_LDADD = ../../libicomms/libicomms.la ../../libutils/libutils.la libtest.la
 imessage_test_CFLAGS = -I../../libicomms/
+
+icomms_generic_test_SOURCES = icomms_generic_test.c
+icomms_generic_test_LDADD = ../../libicomms/libicomms.la ../../libutils/libutils.la libtest.la
+icomms_generic_test_CFLAGS = -I../../libicomms/
+

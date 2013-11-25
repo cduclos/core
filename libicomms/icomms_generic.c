@@ -39,8 +39,6 @@
  */
 
 struct ICommsInterface {
-    struct sockaddr_un *unix_socket;
-    socklen_t unix_socket_length;
     int timeout;
     int physical;
     uint32_t sent;
@@ -59,27 +57,16 @@ struct IMessageHeader {
     pid_t sender;
 };
 
-ICommsInterface *ICommsInterfaceNew(const char *path)
+ICommsInterface *ICommsInterfaceNew(const int sd)
 {
-    if (!path)
-    {
-        return NULL;
-    }
-
-    /* Make sure we don't chew more than what we can swallow. */
-    struct sockaddr_un test;
-    if (strlen(path) > sizeof(test.sun_path))
+    if (sd < 0)
     {
         return NULL;
     }
 
     ICommsInterface *interface = xcalloc(1, sizeof(ICommsInterface));
-    interface->unix_socket = xcalloc(1, sizeof(struct sockaddr_un));
-    interface->unix_socket->sun_family = AF_UNIX;
-    strcpy(interface->unix_socket->sun_path, path);
-    interface->unix_socket_length = sizeof(struct sockaddr_un);
     interface->timeout = ICOMMS_INTERFACE_DEFAULT_TIMEOUT;
-    interface->physical = -1;
+    interface->physical = sd;
 
     return interface;
 }
@@ -90,36 +77,28 @@ void ICommsInterfaceDestroy(ICommsInterface **interface)
     {
         return;
     }
-    free ((*interface)->unix_socket);
     free(*interface);
     *interface = NULL;
 }
 
-void *ICommsInterfaceLowLevelInterface(const ICommsInterface *interface)
+int ICommsInterfaceSocketDescriptor(const ICommsInterface *interface)
 {
-    if (!interface || !interface->unix_socket)
-    {
-        return NULL;
-    }
-    return interface->unix_socket;
+    return interface ? interface->physical : -1;
 }
 
-unsigned int ICommsInterfaceLowLevelSize(const ICommsInterface *interface)
+int ICommsInterfaceStatistics(const ICommsInterface *interface, ICommsInterfaceStats *stats)
 {
-    if (!interface || !interface->unix_socket)
+    if (!interface || !stats)
     {
-        return 0;
+        return -1;
     }
-    return interface->unix_socket_length;
+    stats->received = interface->received;
+    stats->sent = interface->sent;
 }
 
 int ICommsInterfaceTimeout(const ICommsInterface *interface)
 {
-    if (!interface)
-    {
-        return -1;
-    }
-    return interface->timeout;
+    return interface ? interface->timeout : -1;
 }
 
 void ICommsInterfaceSetTimeout(ICommsInterface *interface, const int timeout)

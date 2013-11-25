@@ -28,6 +28,11 @@
 #include <imessage.h>
 /* Generic communications interface */
 typedef struct ICommsInterface ICommsInterface;
+typedef struct {
+    uint32_t sent;
+    uint32_t received;
+} ICommsInterfaceStats;
+
 #define ICOMMS_INTERFACE_DEFAULT_TIMEOUT    10
 
 /**
@@ -35,24 +40,25 @@ typedef struct ICommsInterface ICommsInterface;
   @param name On Unix, path of the socket. On windows, name of the named pipe.
   @return A communication interface or NULL in case of error.
   */
-ICommsInterface *ICommsInterfaceNew(const char *path);
+ICommsInterface *ICommsInterfaceNew(const int sd);
 /**
   @brief Destroys a communication interface.
   @param interface Communication interface to be destroyed.
   */
 void ICommsInterfaceDestroy(ICommsInterface **interface);
 /**
-  @brief Low level interface.
-  @param interface ICommsInterface to operate on.
-  @return A pointer to the low level interface or NULL in case of error.
+  @brief Socket descriptor.
+  @param interface ICommsInterface to query.
+  @return The socket descriptor or -1 in case of error.
   */
-void *ICommsInterfaceLowLevelInterface(const ICommsInterface *interface);
+int ICommsInterfaceSocketDescriptor(const ICommsInterface *interface);
 /**
-  @brief Size of the low level interface.
-  @param interface ICommsInterface to operate on.
-  @return The size of the low level interface or 0 in case of error.
+  @brief Statistics about the given interface.
+  @param interface ICommsInterface to query.
+  @param stats Pointer to a ICommsInterfaceStats to store the current statistics.
+  @return 0 if successful and -1 in case of error.
   */
-unsigned int ICommsInterfaceLowLevelSize(const ICommsInterface *interface);
+int ICommsInterfaceStatistics(const ICommsInterface *interface, ICommsInterfaceStats *stats);
 /**
   @brief Timeout used by this interface.
   @param interface ICommsInterface to query.
